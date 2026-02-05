@@ -1,0 +1,118 @@
+name: test
+
+on:
+  push:
+    branches:
+      - "main"
+      - "release/*"
+    paths-ignore:
+      - '**/*.md'
+  pull_request:
+    branches:
+      - "main"
+      - "release/*"
+    paths-ignore:
+      - '**/*.md'
+
+env:
+  CEPH_DIR: /tmp/ceph-dev
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.62.2
+
+      - name: Verify
+        run: |
+          go mod download
+          make verify
+
+  unit-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Run Unit Tests
+        run: |
+          go mod download
+          make test
+
+  acceptance:
+    if: |
+      always() &&
+      !cancelled() &&
+      !contains(needs.verify.result, 'failure') &&
+      !contains(needs.verify.result, 'cancelled')
+    needs:
+      - verify
+      - unit-test
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        ceph-version:
+          - 'tentacle'  # 20.x (latest)
+          - 'squid'     # 19.x
+          - 'reef'      # 18.x
+      fail-fast: false
+    concurrency:
+      group: ${{ github.head_ref || github.run_id }}-${{ matrix.ceph-version }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+          terraform_version: 1.10.0
+
+      - name: Install Ceph
+        run: |
+          # Add Ceph repository
+          wget -q -O- 'https://download.ceph.com/keys/release.asc' | sudo apt-key add -
+          echo "deb https://download.ceph.com/debian-${{ matrix.ceph-version }}/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/ceph.list
+          sudo apt-get update
+          sudo apt-get install -y ceph ceph-common radosgw
+
+      - name: Setup Ceph Cluster
+        run: make ci-setup
+
+      - name: Run Acceptance Tests
+        run: make ci-test
+        env:
+          CEPH_VERSION: ${{ matrix.ceph-version }}
+        timeout-minutes: 60
+
+      - name: Show Logs on Failure
+        if: failure()
+        run: make ceph-logs
+
+      - name: Cleanup
+        if: always()
+        run: make ci-cleanup

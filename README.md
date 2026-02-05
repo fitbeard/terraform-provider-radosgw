@@ -1,6 +1,6 @@
 # Terraform Provider for Ceph RADOS Gateway (RGW)
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE) [![Go Report Card](https://goreportcard.com/badge/github.com/fitbeard/terraform-provider-radosgw)](https://goreportcard.com/report/github.com/fitbeard/terraform-provider-radosgw)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 This provider enables [Terraform](https://www.terraform.io) and [OpenTofu](https://opentofu.org) to manage resources in [Ceph RADOS Gateway (RGW)](https://docs.ceph.com/en/latest/radosgw/).
 
