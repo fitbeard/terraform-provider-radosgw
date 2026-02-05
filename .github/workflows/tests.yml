@@ -68,8 +68,8 @@ jobs:
           terraform_version: 1.13.3
       - run: |
           # Add Ceph repository
-          curl -fsSL https://download.ceph.com/keys/release.asc | gpg --dearmor -o /usr/share/keyrings/ceph-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/ceph-archive-keyring.gpg] https://download.ceph.com/debian-${{ matrix.ceph-release }}/ jammy main" > /etc/apt/sources.list.d/ceph.list
+          curl -fsSL https://download.ceph.com/keys/release.asc | sudo gpg --dearmor -o /usr/share/keyrings/ceph-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/ceph-archive-keyring.gpg] https://download.ceph.com/debian-${{ matrix.ceph-release }}/ jammy main" | sudo tee /etc/apt/sources.list.d/ceph.list
           sudo apt-get update
           sudo apt-get install -y ceph ceph-mgr-dashboard radosgw
       - run: make ci-setup
