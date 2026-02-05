@@ -6,6 +6,13 @@
       "release-type": "go",
       "exclude-paths": [
         "docs", "scripts"
+      ],
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "Makefile",
+          "glob": false
+        }
       ]
     }
   },
