@@ -23,7 +23,8 @@ jobs:
       - uses: golangci/golangci-lint-action@v9
       - run: |
           go mod download
-          make verify
+          make fmt-check
+          make vet
 
   unit-test:
     runs-on: ubuntu-latest
@@ -76,7 +77,7 @@ jobs:
       - run: make ci-test
         env:
           CEPH_VERSION: ${{ matrix.ceph-release }}
-        timeout-minutes: 5
+        timeout-minutes: 10
       - run: make ceph-logs
         if: failure()
       - run: make ci-cleanup
