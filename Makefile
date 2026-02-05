@@ -5,7 +5,7 @@
 HOSTNAME = registry.local
 NAMESPACE = fitbeard
 NAME = radosgw
-VERSION = 1.0.0 # x-release-please-version
+VERSION = 1.1.0 # x-release-please-version
 OS_ARCH = $(shell go env GOOS)_$(shell go env GOARCH)
 PLUGIN_DIR = ~/.terraform.d/plugins/$(HOSTNAME)/$(NAMESPACE)/$(NAME)/$(VERSION)/$(OS_ARCH)
 
