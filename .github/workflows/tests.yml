@@ -1,0 +1,83 @@
+name: test
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+
+permissions:
+  checks: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: golangci/golangci-lint-action@v9
+      - run: |
+          go mod download
+          make verify
+
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: |
+          go mod download
+          make test
+
+  acceptance:
+    if: |
+      success() &&
+      needs.verify.result == 'success' &&
+      needs.unit-test.result == 'success'
+    needs:
+      - verify
+      - unit-test
+    runs-on: ubuntu-22.04 # Ceph packages are only available for Jammy
+    strategy:
+      matrix:
+        ceph-release:
+          - 'tentacle'
+          - 'squid'
+          - 'reef'
+      fail-fast: false
+    concurrency:
+      group: ${{ github.head_ref || github.run_id }}-${{ matrix.ceph-release }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+          terraform_version: 1.13.3
+      - run: |
+          # Add Ceph repository
+          curl -fsSL https://download.ceph.com/keys/release.asc | gpg --dearmor -o /usr/share/keyrings/ceph-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/ceph-archive-keyring.gpg] https://download.ceph.com/debian-${{ matrix.ceph-release }}/ jammy main" > /etc/apt/sources.list.d/ceph.list
+          sudo apt-get update
+          sudo apt-get install -y ceph ceph-mgr-dashboard radosgw
+      - run: make ci-setup
+      - run: make ci-test
+        env:
+          CEPH_VERSION: ${{ matrix.ceph-release }}
+        timeout-minutes: 5
+      - run: make ceph-logs
+        if: failure()
+      - run: make ci-cleanup
+        if: always()
