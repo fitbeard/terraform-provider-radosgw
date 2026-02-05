@@ -71,9 +71,9 @@ func (r *SubuserResource) Metadata(ctx context.Context, req resource.MetadataReq
 func (r *SubuserResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a RadosGW subuser. Subusers are additional identities under a parent user used for Swift API access. The full subuser ID has the format `{user_id}:{subuser}`. " +
-			"**Note:** Ceph automatically generates one Swift secret key when creating a subuser (only one Swift key is allowed per subuser). " +
+			"~> **Note:** Ceph automatically generates one Swift secret key when creating a subuser (only one Swift key is allowed per subuser). " +
 			"Keys can be managed separately or replaced later using the `radosgw_iam_access_key` resource with `key_type = \"swift\"`.\n\n" +
-			"**Note:** Creating multiple subusers for a single user requires Ceph Squid (19.x) or higher. " +
+			"~> **Note:** Creating multiple subusers for a single user requires Ceph Squid (19.x) or higher. " +
 			"Older versions (Reef 18.x) may have issues with multiple subuser creation.",
 
 		Attributes: map[string]schema.Attribute{
@@ -102,7 +102,7 @@ func (r *SubuserResource) Schema(ctx context.Context, req resource.SchemaRequest
 			},
 			"secret_key": schema.StringAttribute{
 				MarkdownDescription: "The auto-generated Swift secret key. This is the initial key created by Ceph when the subuser is created. " +
-					"**Note:** For production use, consider managing keys explicitly with the `radosgw_iam_access_key` resource for rotation and lifecycle management. " +
+					"~> **Note:** For production use, consider managing keys explicitly with the `radosgw_iam_access_key` resource for rotation and lifecycle management. " +
 					"This field is computed (read-only) and will not detect or track external key changes.",
 				Computed:  true,
 				Sensitive: true,

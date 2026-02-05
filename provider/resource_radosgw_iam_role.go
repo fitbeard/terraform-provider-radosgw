@@ -122,7 +122,7 @@ func (r *RoleResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			},
 			"description": schema.StringAttribute{
 				MarkdownDescription: "A description of the role. Maximum 1000 characters. " +
-					"**Note:** This field is stored in state but may not be returned by the RadosGW API on older Ceph versions (Reef 18.x). " +
+					"~> **Note:** This field is stored in state but may not be returned by the RadosGW API on older Ceph versions (Reef 18.x). " +
 					"The provider preserves the configured value in this case.",
 				Optional: true,
 				Validators: []validator.String{

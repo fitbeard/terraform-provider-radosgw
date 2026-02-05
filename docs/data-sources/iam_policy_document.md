@@ -2,12 +2,12 @@
 subcategory: "IAM (Identity & Access Management)"
 page_title: "RadosGW: radosgw_iam_policy_document"
 description: |-
-  Generates an IAM policy document in JSON format for use with resources that require policies, such as radosgw_role, radosgw_role_policy, and radosgw_s3_bucket_policy. This data source allows you to define policies using HCL instead of writing raw JSON.
+  Generates an IAM policy document in JSON format for use with resources that require policies, such as radosgw_iam_role, radosgw_iam_role_policy, and radosgw_s3_bucket_policy. This data source allows you to define policies using HCL instead of writing raw JSON.
 ---
 
 # radosgw_iam_policy_document
 
-Generates an IAM policy document in JSON format for use with resources that require policies, such as `radosgw_role`, `radosgw_role_policy`, and `radosgw_s3_bucket_policy`. This data source allows you to define policies using HCL instead of writing raw JSON.
+Generates an IAM policy document in JSON format for use with resources that require policies, such as `radosgw_iam_role`, `radosgw_iam_role_policy`, and `radosgw_s3_bucket_policy`. This data source allows you to define policies using HCL instead of writing raw JSON.
 
 ## Example Usage
 

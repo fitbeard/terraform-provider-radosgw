@@ -8,7 +8,7 @@ description: |-
   User quota (type = "user"): Sets the total storage limit across ALL buckets owned by the user. When exceeded, the user cannot store more data in any of their buckets.
   Bucket quota (type = "bucket"): Sets a per-bucket limit that applies to EACH bucket owned by the user. Every bucket the user owns will have this same quota applied.
   Upon deletion, the quota is disabled (not removed, as quotas are properties of users).
-  Note: Account-level quotas are not yet supported by the go-ceph library. Only user-level quotas are currently available.
+  ~> Note: Account-level quotas are not yet supported by the go-ceph library. Only user-level quotas are currently available.
 ---
 
 # radosgw_iam_quota
@@ -23,7 +23,7 @@ Manages user-level quotas in RadosGW. This resource configures storage and objec
 
 Upon deletion, the quota is disabled (not removed, as quotas are properties of users).
 
-**Note:** Account-level quotas are not yet supported by the go-ceph library. Only user-level quotas are currently available.
+~> **Note:** Account-level quotas are not yet supported by the go-ceph library. Only user-level quotas are currently available.
 
 ## Example Usage
 

@@ -63,7 +63,7 @@ func (r *QuotaResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 
 Upon deletion, the quota is disabled (not removed, as quotas are properties of users).
 
-**Note:** Account-level quotas are not yet supported by the go-ceph library. Only user-level quotas are currently available.`,
+~> **Note:** Account-level quotas are not yet supported by the go-ceph library. Only user-level quotas are currently available.`,
 
 		Attributes: map[string]schema.Attribute{
 			"user_id": schema.StringAttribute{

@@ -48,7 +48,7 @@ func (d *SubusersDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 		MarkdownDescription: "Retrieves information about subusers associated with a RadosGW user.\n\n" +
 			"Subusers are additional identities under a parent user, typically used for Swift API access. " +
 			"Each subuser has a full ID in the format `{user_id}:{subuser_name}`.\n\n" +
-			"**Note:** Listing multiple subusers per user requires Ceph Squid (19.x) or higher. " +
+			"~> **Note:** Listing multiple subusers per user requires Ceph Squid (19.x) or higher. " +
 			"Older versions (Reef 18.x) may have issues when multiple subusers exist.",
 
 		Attributes: map[string]schema.Attribute{

@@ -7,11 +7,11 @@ description: |-
   The RadosGW user configured in this provider requires specific capabilities to manage different resources:
   | Capability | Resources |
   |------------|-----------|
-  | `users=*` | `radosgw_iam_user`, `radosgw_iam_subuser`, `radosgw_iam_access_key`, `radosgw_iam_user_caps`, `radosgw_iam_quota`, `radosgw_iam_user` (data source), `radosgw_iam_users` (data source) |
+  | `users=*` | `radosgw_iam_user`, `radosgw_iam_subuser`, `radosgw_iam_access_key`, `radosgw_iam_user_caps`, `radosgw_iam_quota`, `radosgw_iam_user`, `radosgw_iam_users` |
   | `buckets=*` | `radosgw_s3_bucket`, `radosgw_s3_bucket_link`, `radosgw_s3_bucket_acl`, `radosgw_s3_bucket_policy`, `radosgw_s3_bucket_lifecycle_configuration` |
-  | `oidc-provider=*` | `radosgw_iam_openid_connect_provider`, `radosgw_iam_openid_connect_provider` (data source) |
-  | `roles=*` | `radosgw_iam_role`, `radosgw_iam_role_policy`, `radosgw_iam_role` (data source), `radosgw_iam_roles` (data source) |
-  | `metadata=*` | `radosgw_iam_users` (data source) |
+  | `oidc-provider=*` | `radosgw_iam_openid_connect_provider` |
+  | `roles=*` | `radosgw_iam_role`, `radosgw_iam_role_policy`, `radosgw_iam_roles` |
+  | `metadata=*` | `radosgw_iam_users` |
   To grant all required capabilities to a user:
   
   radosgw-admin caps add --uid=admin --caps="buckets=*;metadata=*;oidc-provider=*;roles=*;users=*"
@@ -27,11 +27,11 @@ The RadosGW user configured in this provider requires specific capabilities to m
 
 | Capability | Resources |
 |------------|-----------|
-| `users=*` | `radosgw_iam_user`, `radosgw_iam_subuser`, `radosgw_iam_access_key`, `radosgw_iam_user_caps`, `radosgw_iam_quota`, `radosgw_iam_user` (data source), `radosgw_iam_users` (data source) |
+| `users=*` | `radosgw_iam_user`, `radosgw_iam_subuser`, `radosgw_iam_access_key`, `radosgw_iam_user_caps`, `radosgw_iam_quota`, `radosgw_iam_user`, `radosgw_iam_users` |
 | `buckets=*` | `radosgw_s3_bucket`, `radosgw_s3_bucket_link`, `radosgw_s3_bucket_acl`, `radosgw_s3_bucket_policy`, `radosgw_s3_bucket_lifecycle_configuration` |
-| `oidc-provider=*` | `radosgw_iam_openid_connect_provider`, `radosgw_iam_openid_connect_provider` (data source) |
-| `roles=*` | `radosgw_iam_role`, `radosgw_iam_role_policy`, `radosgw_iam_role` (data source), `radosgw_iam_roles` (data source) |
-| `metadata=*` | `radosgw_iam_users` (data source) |
+| `oidc-provider=*` | `radosgw_iam_openid_connect_provider` |
+| `roles=*` | `radosgw_iam_role`, `radosgw_iam_role_policy`, `radosgw_iam_roles` |
+| `metadata=*` | `radosgw_iam_users` |
 
 To grant all required capabilities to a user:
 
