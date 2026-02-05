@@ -73,6 +73,8 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/ceph-archive-keyring.gpg] https://download.ceph.com/debian-${{ matrix.ceph-release }}/ jammy main" | sudo tee /etc/apt/sources.list.d/ceph.list
           sudo apt-get update
           sudo apt-get install -y ceph ceph-mgr-dashboard radosgw
+          # Workaround for https://tracker.ceph.com/issues/74199
+          sudo rm -fr /usr/share/ceph/mgr/dashboard/controllers/smb.py
       - run: make ci-setup
       - run: make ci-test
         env:
