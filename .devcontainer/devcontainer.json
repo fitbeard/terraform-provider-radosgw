@@ -1,0 +1,40 @@
+{
+  "name": "Ceph Development",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "CEPH_RELEASE": "tentacle"
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/aws-cli:1": {
+      "version": "2.32.28"
+    },
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.25.5",
+      "golangciLintVersion": "2.8.0"
+    },
+    "ghcr.io/devcontainers-extra/features/opentofu:1": {
+      "version": "1.9.1"
+    },
+    "ghcr.io/devcontainers-extra/features/terraform-asdf:2": {
+      "version": "1.13.3"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": []
+    }
+  },
+  "forwardPorts": [
+    7480,
+    8080
+  ],
+  "mounts": [
+    "source=ceph-bash-history-${devcontainerId},target=/command-history,type=volume",
+    "source=ceph-external-files-${devcontainerId},target=/external-files,type=volume"
+  ],
+  "remoteUser": "vscode",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces,type=bind,consistency=delegated",
+  "workspaceFolder": "/workspaces"
+}
