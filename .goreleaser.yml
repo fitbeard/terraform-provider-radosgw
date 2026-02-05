@@ -62,6 +62,7 @@ release:
       name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
   # Visit your project's GitHub Releases page to publish this release.
   draft: true
+  prerelease: auto
 
 # Managed by release-please
 changelog:
