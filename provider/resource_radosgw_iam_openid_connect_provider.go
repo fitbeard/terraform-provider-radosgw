@@ -185,7 +185,7 @@ func (r *OIDCProviderResource) Schema(ctx context.Context, req resource.SchemaRe
 				MarkdownDescription: "Whether to allow in-place updates for `client_id_list` and `thumbprint_list`. " +
 					"When `true` (default), changes will be applied in-place. " +
 					"When `false`, changes to these attributes will destroy and recreate the provider. " +
-					"**Note:** In-place updates require Ceph Tentacle (20.x). On older versions, set to `false`.",
+					"~> **Note:** In-place updates require Ceph Tentacle (20.x). On older versions, set to `false`.",
 				Optional: true,
 				Computed: true,
 				Default:  booldefault.StaticBool(true),

@@ -3,17 +3,17 @@ subcategory: "IAM (Identity & Access Management)"
 page_title: "RadosGW: radosgw_iam_access_keys"
 description: |-
   Retrieves information about IAM access keys associated with the specified RadosGW user. Use this data source to get S3 and/or Swift access keys for a user.
-  Note: The RadosGW API also returns active and create_date fields, but these are not yet exposed by the go-ceph library. They will be added in a future version when go-ceph supports them.
-  Note: Listing multiple S3 keys per user requires Ceph Squid (19.x) or higher. Older versions (Reef 18.x) may have issues when multiple keys exist.
+  ~> Note: The RadosGW API also returns active and create_date fields, but these are not yet exposed by the go-ceph library. They will be added in a future version when go-ceph supports them.
+  ~> Note: Listing multiple S3 keys per user requires Ceph Squid (19.x) or higher. Older versions (Reef 18.x) may have issues when multiple keys exist.
 ---
 
 # radosgw_iam_access_keys
 
 Retrieves information about IAM access keys associated with the specified RadosGW user. Use this data source to get S3 and/or Swift access keys for a user.
 
-**Note:** The RadosGW API also returns `active` and `create_date` fields, but these are not yet exposed by the go-ceph library. They will be added in a future version when go-ceph supports them.
+~> **Note:** The RadosGW API also returns `active` and `create_date` fields, but these are not yet exposed by the go-ceph library. They will be added in a future version when go-ceph supports them.
 
-**Note:** Listing multiple S3 keys per user requires Ceph Squid (19.x) or higher. Older versions (Reef 18.x) may have issues when multiple keys exist.
+~> **Note:** Listing multiple S3 keys per user requires Ceph Squid (19.x) or higher. Older versions (Reef 18.x) may have issues when multiple keys exist.
 
 ## Example Usage
 

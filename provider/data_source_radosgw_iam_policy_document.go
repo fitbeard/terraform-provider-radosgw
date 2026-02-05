@@ -65,7 +65,7 @@ func (d *PolicyDocumentDataSource) Metadata(ctx context.Context, req datasource.
 func (d *PolicyDocumentDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Generates an IAM policy document in JSON format for use with resources that " +
-			"require policies, such as `radosgw_role`, `radosgw_role_policy`, and `radosgw_s3_bucket_policy`. " +
+			"require policies, such as `radosgw_iam_role`, `radosgw_iam_role_policy`, and `radosgw_s3_bucket_policy`. " +
 			"This data source allows you to define policies using HCL instead of writing raw JSON.",
 
 		Attributes: map[string]schema.Attribute{

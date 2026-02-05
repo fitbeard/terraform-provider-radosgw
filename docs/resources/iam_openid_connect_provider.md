@@ -74,7 +74,7 @@ The following arguments are supported:
 * `url` - (Required) URL of the identity provider. This value corresponds to the `iss` claim in OIDC tokens. Must include the protocol (`http://` or `https://`). The full URL is stored and used when RadosGW contacts the OIDC provider, but the protocol is stripped when constructing the ARN.
 
 
-* `allow_updates` - (Optional) Whether to allow in-place updates for `client_id_list` and `thumbprint_list`. When `true` (default), changes will be applied in-place. When `false`, changes to these attributes will destroy and recreate the provider. **Note:** In-place updates require Ceph Tentacle (20.x). On older versions, set to `false`.
+* `allow_updates` - (Optional) Whether to allow in-place updates for `client_id_list` and `thumbprint_list`. When `true` (default), changes will be applied in-place. When `false`, changes to these attributes will destroy and recreate the provider. ~> **Note:** In-place updates require Ceph Tentacle (20.x). On older versions, set to `false`.
 
 
 

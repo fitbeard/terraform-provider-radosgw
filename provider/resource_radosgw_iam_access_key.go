@@ -62,7 +62,7 @@ func (r *KeyResource) Schema(ctx context.Context, req resource.SchemaRequest, re
 			"**S3 keys:** Multiple access keys per user are supported. Keys are identified by `access_key`.\n\n" +
 			"**Swift keys:** Only one access key per subuser is supported. Creating a new key replaces the existing one. " +
 			"Requires a `subuser` attribute.\n\n" +
-			"**Note:** Managing multiple S3 keys per user requires Ceph Squid (19.x) or higher. " +
+			"~> **Note:** Managing multiple S3 keys per user requires Ceph Squid (19.x) or higher. " +
 			"Older versions (Reef 18.x) may have issues with key deletion when multiple keys exist.",
 
 		Attributes: map[string]schema.Attribute{

@@ -78,7 +78,7 @@ The following arguments are supported:
 * `name` - (Required) The name of the role. Must be unique and can contain up to 64 characters. Valid characters: alphanumeric characters, plus (+), equals (=), comma (,), period (.), at (@), underscore (_), and hyphen (-).
 
 
-* `description` - (Optional) A description of the role. Maximum 1000 characters. **Note:** This field is stored in state but may not be returned by the RadosGW API on older Ceph versions (Reef 18.x). The provider preserves the configured value in this case.
+* `description` - (Optional) A description of the role. Maximum 1000 characters. ~> **Note:** This field is stored in state but may not be returned by the RadosGW API on older Ceph versions (Reef 18.x). The provider preserves the configured value in this case.
 * `max_session_duration` - (Optional) Maximum session duration (in seconds) for the role. Default is 3600 (1 hour). Valid values: 3600-43200 (1-12 hours).
 * `path` - (Optional) The path to the role. Default is `/`. Paths must begin and end with `/`.
 
