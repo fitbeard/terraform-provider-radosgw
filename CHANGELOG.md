@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.1](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.1.0...v1.1.1) (2026-02-12)
+
+
+### Bug Fixes
+
+* make install command ([#20](https://github.com/fitbeard/terraform-provider-radosgw/issues/20)) ([4f3ec06](https://github.com/fitbeard/terraform-provider-radosgw/commit/4f3ec06578e8b0eff79152f112cffba0cc19e42c))
+
+
+### Miscellaneous
+
+* **deps:** Bump github.com/aws/aws-sdk-go-v2/service/s3 ([#4](https://github.com/fitbeard/terraform-provider-radosgw/issues/4)) ([9f026f2](https://github.com/fitbeard/terraform-provider-radosgw/commit/9f026f2df94c2ecfae5e22043660533abdd6890e))
+* **deps:** Bump github.com/hashicorp/terraform-plugin-sdk/v2 ([#3](https://github.com/fitbeard/terraform-provider-radosgw/issues/3)) ([bf15e90](https://github.com/fitbeard/terraform-provider-radosgw/commit/bf15e909f973b1b41a4140248cf43161e37d3937))
+* update go-ceph to 0.38.0 ([#17](https://github.com/fitbeard/terraform-provider-radosgw/issues/17)) ([04edb25](https://github.com/fitbeard/terraform-provider-radosgw/commit/04edb25209cb5ae392eb72999472eff999c3113b))
+* update release-please config ([#18](https://github.com/fitbeard/terraform-provider-radosgw/issues/18)) ([1f8c6de](https://github.com/fitbeard/terraform-provider-radosgw/commit/1f8c6de7585832497c3e4400a0bb937fa14e6a79))
+
 ## [1.1.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.0.0...v1.1.0) (2026-02-05)
 
 
