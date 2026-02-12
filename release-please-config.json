@@ -1,19 +1,43 @@
 {
-  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "draft": true,
-  "packages": {
-    ".": {
-      "release-type": "go",
-      "exclude-paths": [
-        "docs", "scripts"
-      ],
-      "extra-files": [
-        {
-          "type": "generic",
-          "path": "Makefile",
-          "glob": false
-        }
-      ]
-    }
-  }
+	"$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+	"draft": true,
+	"packages": {
+		".": {
+			"release-type": "go",
+			"exclude-paths": [
+				"docs",
+				"scripts"
+			],
+			"extra-files": [
+				{
+					"type": "generic",
+					"path": "Makefile",
+					"glob": false
+				}
+			]
+		}
+	},
+	"changelog-sections": [
+		{
+			"type": "feat",
+			"section": "Features"
+		},
+		{
+			"type": "fix",
+			"section": "Bug Fixes"
+		},
+		{
+			"type": "deps",
+			"section": "Dependencies"
+		},
+		{
+			"type": "docs",
+			"section": "Documentation"
+		},
+		{
+			"type": "chore",
+			"section": "Miscellaneous",
+			"hidden": false
+		}
+	]
 }
