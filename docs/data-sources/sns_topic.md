@@ -3,11 +3,14 @@ subcategory: "SNS (Simple Notification)"
 page_title: "RadosGW: radosgw_sns_topic"
 description: |-
   Use this data source to get information about an existing SNS topic in RadosGW. By using this data source, you can reference SNS topics without having to hard code ARNs.
+  ~> Ceph Reef (18.x) compatibility: On Ceph Reef, the GetTopicAttributes API returns a limited set of attributes. Fields such as user, time_to_live, max_retries, retry_sleep_duration, and endpoint arguments may not be populated.
 ---
 
 # radosgw_sns_topic
 
 Use this data source to get information about an existing SNS topic in RadosGW. By using this data source, you can reference SNS topics without having to hard code ARNs.
+
+~> **Ceph Reef (18.x) compatibility:** On Ceph Reef, the `GetTopicAttributes` API returns a limited set of attributes. Fields such as `user`, `time_to_live`, `max_retries`, `retry_sleep_duration`, and endpoint arguments may not be populated.
 
 ## Example Usage
 
@@ -56,14 +59,14 @@ The following attributes are exported:
 * `cloudevents` - Whether CloudEvents format is enabled.
 * `kafka_ack_level` - The Kafka acknowledgment level (`none`, `broker`).
 * `kafka_brokers` - Comma-separated list of Kafka broker endpoints.
-* `max_retries` - Maximum number of retries for failed deliveries.
+* `max_retries` - Maximum number of retries for failed deliveries. Not returned by Ceph Reef (18.x).
 * `mechanism` - Authentication mechanism (e.g., `plain`, `scram-sha-256`, `scram-sha-512`).
 * `opaque_data` - Opaque data attached to the topic.
 * `persistent` - Whether the topic is persistent.
 * `push_endpoint` - The push endpoint URL for the topic.
-* `retry_sleep_duration` - Sleep duration (in seconds) between delivery retries.
-* `time_to_live` - Time-to-live (in seconds) for persistent messages.
+* `retry_sleep_duration` - Sleep duration (in seconds) between delivery retries. Not returned by Ceph Reef (18.x).
+* `time_to_live` - Time-to-live (in seconds) for persistent messages. Not returned by Ceph Reef (18.x).
 * `use_ssl` - Whether SSL is used for the endpoint connection.
-* `user` - The RadosGW user that owns the topic.
+* `user` - The RadosGW user that owns the topic. Not returned by Ceph Reef (18.x).
 * `verify_ssl` - Whether SSL certificate verification is enabled.
 * `name` - See Argument Reference above.

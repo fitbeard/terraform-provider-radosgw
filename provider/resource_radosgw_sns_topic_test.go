@@ -14,6 +14,23 @@ func TestAccRadosgwSNSTopic_basic(t *testing.T) {
 
 	topicName := randomName("tf-acc-topic")
 
+	checks := []resource.TestCheckFunc{
+		testAccCheckRadosgwSNSTopicExists("radosgw_sns_topic.test"),
+		resource.TestCheckResourceAttr("radosgw_sns_topic.test", "name", topicName),
+		resource.TestCheckResourceAttrSet("radosgw_sns_topic.test", "arn"),
+		resource.TestCheckResourceAttr("radosgw_sns_topic.test", "push_endpoint", "http://localhost:10900"),
+		resource.TestCheckResourceAttr("radosgw_sns_topic.test", "persistent", "false"),
+	}
+	// User is only returned by GetTopicAttributes on Squid+
+	if !getCephVersion().LessThan(CephVersion_Squid) {
+		checks = append(checks,
+			resource.TestCheckResourceAttrSet("radosgw_sns_topic.test", "user"),
+			resource.TestCheckResourceAttr("radosgw_sns_topic.test", "verify_ssl", "true"),
+			resource.TestCheckResourceAttr("radosgw_sns_topic.test", "cloudevents", "false"),
+			resource.TestCheckResourceAttr("radosgw_sns_topic.test", "use_ssl", "false"),
+		)
+	}
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -21,17 +38,7 @@ func TestAccRadosgwSNSTopic_basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRadosgwSNSTopicConfig_basic(topicName),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheckRadosgwSNSTopicExists("radosgw_sns_topic.test"),
-					resource.TestCheckResourceAttr("radosgw_sns_topic.test", "name", topicName),
-					resource.TestCheckResourceAttrSet("radosgw_sns_topic.test", "arn"),
-					resource.TestCheckResourceAttrSet("radosgw_sns_topic.test", "user"),
-					resource.TestCheckResourceAttr("radosgw_sns_topic.test", "push_endpoint", "http://localhost:10900"),
-					resource.TestCheckResourceAttr("radosgw_sns_topic.test", "persistent", "false"),
-					resource.TestCheckResourceAttr("radosgw_sns_topic.test", "verify_ssl", "true"),
-					resource.TestCheckResourceAttr("radosgw_sns_topic.test", "cloudevents", "false"),
-					resource.TestCheckResourceAttr("radosgw_sns_topic.test", "use_ssl", "false"),
-				),
+				Check:  resource.ComposeTestCheckFunc(checks...),
 			},
 			// Import by ARN
 			{

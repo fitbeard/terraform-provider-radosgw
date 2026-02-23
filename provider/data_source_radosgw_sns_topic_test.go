@@ -12,6 +12,19 @@ func TestAccRadosgwSNSTopicDataSource_basic(t *testing.T) {
 
 	topicName := randomName("tf-acc-ds-topic")
 
+	checks := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttrPair("data.radosgw_sns_topic.test", "name", "radosgw_sns_topic.test", "name"),
+		resource.TestCheckResourceAttrPair("data.radosgw_sns_topic.test", "arn", "radosgw_sns_topic.test", "arn"),
+		resource.TestCheckResourceAttr("data.radosgw_sns_topic.test", "push_endpoint", "http://localhost:10900"),
+		resource.TestCheckResourceAttr("data.radosgw_sns_topic.test", "persistent", "false"),
+	}
+	// User is only returned by GetTopicAttributes on Squid+
+	if !getCephVersion().LessThan(CephVersion_Squid) {
+		checks = append(checks,
+			resource.TestCheckResourceAttrSet("data.radosgw_sns_topic.test", "user"),
+		)
+	}
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -19,13 +32,7 @@ func TestAccRadosgwSNSTopicDataSource_basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRadosgwSNSTopicDataSourceConfig_basic(topicName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrPair("data.radosgw_sns_topic.test", "name", "radosgw_sns_topic.test", "name"),
-					resource.TestCheckResourceAttrPair("data.radosgw_sns_topic.test", "arn", "radosgw_sns_topic.test", "arn"),
-					resource.TestCheckResourceAttr("data.radosgw_sns_topic.test", "push_endpoint", "http://localhost:10900"),
-					resource.TestCheckResourceAttrSet("data.radosgw_sns_topic.test", "user"),
-					resource.TestCheckResourceAttr("data.radosgw_sns_topic.test", "persistent", "false"),
-				),
+				Check:  resource.ComposeTestCheckFunc(checks...),
 			},
 		},
 	})
@@ -37,7 +44,7 @@ func TestAccRadosgwSNSTopicDataSource_persistent(t *testing.T) {
 	topicName := randomName("tf-acc-ds-topic")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		PreCheck:                 func() { testAccPreCheck(t); testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwSNSTopicDestroy,
 		Steps: []resource.TestStep{
@@ -66,7 +73,7 @@ func TestAccRadosgwSNSTopicDataSource_amqp(t *testing.T) {
 	topicName := randomName("tf-acc-ds-topic")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		PreCheck:                 func() { testAccPreCheck(t); testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwSNSTopicDestroy,
 		Steps: []resource.TestStep{

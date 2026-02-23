@@ -16,7 +16,7 @@ func TestAccRadosgwSNSTopicPolicy_basic(t *testing.T) {
 	topicName := randomName("tf-acc-policy")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		PreCheck:                 func() { testAccPreCheck(t); testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwSNSTopicPolicyDestroy,
 		Steps: []resource.TestStep{
@@ -47,7 +47,7 @@ func TestAccRadosgwSNSTopicPolicy_update(t *testing.T) {
 	topicName := randomName("tf-acc-policy")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		PreCheck:                 func() { testAccPreCheck(t); testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwSNSTopicPolicyDestroy,
 		Steps: []resource.TestStep{
@@ -75,7 +75,7 @@ func TestAccRadosgwSNSTopicPolicy_disappears(t *testing.T) {
 	topicName := randomName("tf-acc-policy")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		PreCheck:                 func() { testAccPreCheck(t); testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwSNSTopicPolicyDestroy,
 		Steps: []resource.TestStep{

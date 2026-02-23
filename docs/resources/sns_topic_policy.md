@@ -5,6 +5,7 @@ description: |-
   Manages an access policy for an SNS topic in RadosGW. The policy controls who can access the topic in addition to the owner.
   ~> Note: This resource manages the policy independently from the radosgw_sns_topic resource. Using both on the same topic will cause conflicts.
   ~> Note: RadosGW's CreateTopic API (used for topic updates) replaces all topic attributes, which would normally clear the policy. The radosgw_sns_topic resource handles this by reading and re-including the existing policy in every update call, so the policy managed by this resource is preserved through topic changes.
+  ~> Ceph version requirement: This resource requires Ceph Squid (19.x) or later. The SetTopicAttributes API used to manage topic policies is not available on Ceph Reef (18.x).
 ---
 
 # radosgw_sns_topic_policy
@@ -14,6 +15,8 @@ Manages an access policy for an SNS topic in RadosGW. The policy controls who ca
 ~> **Note:** This resource manages the policy independently from the `radosgw_sns_topic` resource. Using both on the same topic will cause conflicts.
 
 ~> **Note:** RadosGW's `CreateTopic` API (used for topic updates) replaces all topic attributes, which would normally clear the policy. The `radosgw_sns_topic` resource handles this by reading and re-including the existing policy in every update call, so the policy managed by this resource is preserved through topic changes.
+
+~> **Ceph version requirement:** This resource requires **Ceph Squid (19.x) or later**. The `SetTopicAttributes` API used to manage topic policies is not available on Ceph Reef (18.x).
 
 ## Example Usage
 

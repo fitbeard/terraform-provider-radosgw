@@ -54,7 +54,10 @@ func (d *SNSTopicDataSource) Metadata(ctx context.Context, req datasource.Metada
 func (d *SNSTopicDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Use this data source to get information about an existing SNS topic in RadosGW. " +
-			"By using this data source, you can reference SNS topics without having to hard code ARNs.",
+			"By using this data source, you can reference SNS topics without having to hard code ARNs.\n\n" +
+			"~> **Ceph Reef (18.x) compatibility:** On Ceph Reef, the `GetTopicAttributes` API returns " +
+			"a limited set of attributes. Fields such as `user`, `time_to_live`, `max_retries`, " +
+			"`retry_sleep_duration`, and endpoint arguments may not be populated.",
 
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
@@ -66,8 +69,9 @@ func (d *SNSTopicDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 				Computed:            true,
 			},
 			"user": schema.StringAttribute{
-				MarkdownDescription: "The RadosGW user that owns the topic.",
-				Computed:            true,
+				MarkdownDescription: "The RadosGW user that owns the topic. " +
+					"Not returned by Ceph Reef (18.x).",
+				Computed: true,
 			},
 			"push_endpoint": schema.StringAttribute{
 				MarkdownDescription: "The push endpoint URL for the topic.",
@@ -118,16 +122,19 @@ func (d *SNSTopicDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 				Computed:            true,
 			},
 			"time_to_live": schema.Int64Attribute{
-				MarkdownDescription: "Time-to-live (in seconds) for persistent messages.",
-				Computed:            true,
+				MarkdownDescription: "Time-to-live (in seconds) for persistent messages. " +
+					"Not returned by Ceph Reef (18.x).",
+				Computed: true,
 			},
 			"max_retries": schema.Int64Attribute{
-				MarkdownDescription: "Maximum number of retries for failed deliveries.",
-				Computed:            true,
+				MarkdownDescription: "Maximum number of retries for failed deliveries. " +
+					"Not returned by Ceph Reef (18.x).",
+				Computed: true,
 			},
 			"retry_sleep_duration": schema.Int64Attribute{
-				MarkdownDescription: "Sleep duration (in seconds) between delivery retries.",
-				Computed:            true,
+				MarkdownDescription: "Sleep duration (in seconds) between delivery retries. " +
+					"Not returned by Ceph Reef (18.x).",
+				Computed: true,
 			},
 		},
 	}

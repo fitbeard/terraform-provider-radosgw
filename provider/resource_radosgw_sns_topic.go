@@ -126,7 +126,12 @@ func (r *SNSTopicResource) Schema(ctx context.Context, req resource.SchemaReques
 			"existing topic policy (managed by `radosgw_sns_topic_policy`) through updates. " +
 			"However, updating a topic may require re-creating any bucket notifications " +
 			"associated with it. See the " +
-			"[Ceph Bucket Notifications documentation](https://docs.ceph.com/en/latest/radosgw/notifications/) for details.",
+			"[Ceph Bucket Notifications documentation](https://docs.ceph.com/en/latest/radosgw/notifications/) for details.\n\n" +
+			"~> **Ceph Reef (18.x) compatibility:** On Ceph Reef, the `GetTopicAttributes` API returns a " +
+			"limited set of attributes. The provider automatically preserves configured values for " +
+			"attributes that the API does not return (e.g., `user`, `time_to_live`, `max_retries`, " +
+			"`retry_sleep_duration`, and endpoint arguments). These attributes may appear empty " +
+			"when importing a topic on Reef.",
 
 		Attributes: map[string]schema.Attribute{
 			// ---- Required ----
@@ -252,17 +257,20 @@ func (r *SNSTopicResource) Schema(ctx context.Context, req resource.SchemaReques
 			// ---- Optional: persistence settings ----
 			"time_to_live": schema.Int64Attribute{
 				MarkdownDescription: "Maximum time in seconds to retain notifications. " +
-					"Only applicable when `persistent` is `true`. Zero means infinite.",
+					"Only applicable when `persistent` is `true`. Zero means infinite. " +
+					"Not returned by `GetTopicAttributes` on Ceph Reef (18.x); the configured value is preserved in state.",
 				Optional: true,
 			},
 			"max_retries": schema.Int64Attribute{
 				MarkdownDescription: "Maximum number of retries before expiring a notification. " +
-					"Only applicable when `persistent` is `true`. Zero means infinite.",
+					"Only applicable when `persistent` is `true`. Zero means infinite. " +
+					"Not returned by `GetTopicAttributes` on Ceph Reef (18.x); the configured value is preserved in state.",
 				Optional: true,
 			},
 			"retry_sleep_duration": schema.Int64Attribute{
 				MarkdownDescription: "Time in seconds between notification delivery retries. " +
-					"Only applicable when `persistent` is `true`. Zero means no delay.",
+					"Only applicable when `persistent` is `true`. Zero means no delay. " +
+					"Not returned by `GetTopicAttributes` on Ceph Reef (18.x); the configured value is preserved in state.",
 				Optional: true,
 			},
 
@@ -276,8 +284,9 @@ func (r *SNSTopicResource) Schema(ctx context.Context, req resource.SchemaReques
 				},
 			},
 			"user": schema.StringAttribute{
-				MarkdownDescription: "The name of the user that created the topic.",
-				Computed:            true,
+				MarkdownDescription: "The name of the user that created the topic. " +
+					"Not returned by Ceph Reef (18.x).",
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -352,6 +361,10 @@ func (r *SNSTopicResource) Create(ctx context.Context, req resource.CreateReques
 	}
 
 	plan.User = types.StringValue(topicAttrs.User)
+	// On older Ceph (Reef), User may not be returned by GetTopicAttributes
+	if topicAttrs.User == "" {
+		plan.User = types.StringNull()
+	}
 
 	tflog.Trace(ctx, "Created SNS topic", map[string]any{
 		"name": plan.Name.ValueString(),
@@ -372,6 +385,11 @@ func (r *SNSTopicResource) Read(ctx context.Context, req resource.ReadRequest, r
 	// Preserve sensitive fields that are not returned by the API
 	currentUserName := state.UserName
 	currentPassword := state.Password
+
+	// Save current state for fallback when the API doesn't return certain
+	// attributes. Older Ceph versions (e.g. Reef) return a limited set of
+	// fields from GetTopicAttributes.
+	prevState := state
 
 	topicAttrs, err := r.readTopic(ctx, state.ARN.ValueString())
 	if err != nil {
@@ -404,7 +422,13 @@ func (r *SNSTopicResource) Read(ctx context.Context, req resource.ReadRequest, r
 	// Top-level attributes
 	state.Name = types.StringValue(topicAttrs.Name)
 	state.ARN = types.StringValue(topicAttrs.TopicArn)
-	state.User = types.StringValue(topicAttrs.User)
+
+	// User may be empty on older Ceph versions (Reef)
+	if topicAttrs.User != "" {
+		state.User = types.StringValue(topicAttrs.User)
+	} else {
+		state.User = prevState.User
+	}
 
 	// Push endpoint
 	if endpointInfo.EndpointAddress != "" {
@@ -423,23 +447,37 @@ func (r *SNSTopicResource) Read(ctx context.Context, req resource.ReadRequest, r
 	// Persistent flag (from EndPoint JSON, not EndpointArgs)
 	state.Persistent = types.BoolValue(endpointInfo.Persistent)
 
-	// Persistence settings (from EndPoint JSON)
-	state.TimeToLive = parseSNSOptionalInt(endpointInfo.TimeToLive)
-	state.MaxRetries = parseSNSOptionalInt(endpointInfo.MaxRetries)
-	state.RetrySleepDuration = parseSNSOptionalInt(endpointInfo.RetrySleepDuration)
+	// Persistence settings (from EndPoint JSON).
+	// On older Ceph (Reef), these fields may not be present in the JSON —
+	// preserve state values so that the plan does not drift.
+	if v := parseSNSOptionalInt(endpointInfo.TimeToLive); !v.IsNull() {
+		state.TimeToLive = v
+	} else {
+		state.TimeToLive = prevState.TimeToLive
+	}
+	if v := parseSNSOptionalInt(endpointInfo.MaxRetries); !v.IsNull() {
+		state.MaxRetries = v
+	} else {
+		state.MaxRetries = prevState.MaxRetries
+	}
+	if v := parseSNSOptionalInt(endpointInfo.RetrySleepDuration); !v.IsNull() {
+		state.RetrySleepDuration = v
+	} else {
+		state.RetrySleepDuration = prevState.RetrySleepDuration
+	}
 
-	// Booleans from EndpointArgs (absent means default)
-	state.VerifySSL = parseSNSBoolArg(endpointArgs, "verify-ssl", true)
-	state.CloudEvents = parseSNSBoolArg(endpointArgs, "cloudevents", false)
-	state.UseSSL = parseSNSBoolArg(endpointArgs, "use-ssl", false)
+	// Booleans from EndpointArgs — preserve state when key is absent (Reef compat)
+	state.VerifySSL = parseSNSBoolArgPreserve(endpointArgs, "verify-ssl", prevState.VerifySSL)
+	state.CloudEvents = parseSNSBoolArgPreserve(endpointArgs, "cloudevents", prevState.CloudEvents)
+	state.UseSSL = parseSNSBoolArgPreserve(endpointArgs, "use-ssl", prevState.UseSSL)
 
-	// Strings from EndpointArgs
-	state.CALocation = parseSNSStringArg(endpointArgs, "ca-location")
-	state.Mechanism = parseSNSStringArg(endpointArgs, "mechanism")
-	state.AMQPExchange = parseSNSStringArg(endpointArgs, "amqp-exchange")
-	state.AMQPAckLevel = parseSNSStringArg(endpointArgs, "amqp-ack-level")
-	state.KafkaAckLevel = parseSNSStringArg(endpointArgs, "kafka-ack-level")
-	state.KafkaBrokers = parseSNSStringArg(endpointArgs, "kafka-brokers")
+	// Strings from EndpointArgs — preserve state when key is absent (Reef compat)
+	state.CALocation = parseSNSStringArgPreserve(endpointArgs, "ca-location", prevState.CALocation)
+	state.Mechanism = parseSNSStringArgPreserve(endpointArgs, "mechanism", prevState.Mechanism)
+	state.AMQPExchange = parseSNSStringArgPreserve(endpointArgs, "amqp-exchange", prevState.AMQPExchange)
+	state.AMQPAckLevel = parseSNSStringArgPreserve(endpointArgs, "amqp-ack-level", prevState.AMQPAckLevel)
+	state.KafkaAckLevel = parseSNSStringArgPreserve(endpointArgs, "kafka-ack-level", prevState.KafkaAckLevel)
+	state.KafkaBrokers = parseSNSStringArgPreserve(endpointArgs, "kafka-brokers", prevState.KafkaBrokers)
 
 	// Preserve sensitive fields (not returned by the API)
 	state.UserName = currentUserName
@@ -723,9 +761,32 @@ func parseSNSBoolArg(args url.Values, key string, defaultVal bool) types.Bool {
 	return types.BoolValue(v == "true")
 }
 
+// parseSNSBoolArgPreserve extracts a boolean from EndpointArgs.
+// If the key is absent (older Ceph versions may not return all args),
+// preserves the provided state value instead of falling back to a default.
+func parseSNSBoolArgPreserve(args url.Values, key string, stateVal types.Bool) types.Bool {
+	if !args.Has(key) {
+		return stateVal
+	}
+	return types.BoolValue(args.Get(key) == "true")
+}
+
 // parseSNSStringArg extracts a string value from EndpointArgs.
 // Returns types.StringNull() if the key is absent or empty.
 func parseSNSStringArg(args url.Values, key string) types.String {
+	v := args.Get(key)
+	if v == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(v)
+}
+
+// parseSNSStringArgPreserve extracts a string from EndpointArgs.
+// If the key is absent, preserves the provided state value.
+func parseSNSStringArgPreserve(args url.Values, key string, stateVal types.String) types.String {
+	if !args.Has(key) {
+		return stateVal
+	}
 	v := args.Get(key)
 	if v == "" {
 		return types.StringNull()

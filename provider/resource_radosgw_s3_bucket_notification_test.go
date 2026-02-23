@@ -72,7 +72,7 @@ func TestAccRadosgwS3BucketNotification_multipleTopics(t *testing.T) {
 	topicName2 := randomName("tf-acc-topic")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		PreCheck:                 func() { testAccPreCheck(t); testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
 		Steps: []resource.TestStep{
@@ -95,7 +95,7 @@ func TestAccRadosgwS3BucketNotification_update(t *testing.T) {
 	topicName2 := randomName("tf-acc-topic")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		PreCheck:                 func() { testAccPreCheck(t); testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
 		Steps: []resource.TestStep{

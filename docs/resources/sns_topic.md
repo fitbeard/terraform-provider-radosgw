@@ -4,6 +4,7 @@ page_title: "RadosGW: radosgw_sns_topic"
 description: |-
   Manages an SNS topic in RadosGW for bucket notifications. Topics define push endpoints where bucket event notifications are sent. Supports HTTP, AMQP 0.9.1, and Kafka endpoints.
   ~> Note: Updating a topic uses CreateTopic as an upsert, which replaces all topic attributes in a single API call. The provider automatically preserves any existing topic policy (managed by radosgw_sns_topic_policy) through updates. However, updating a topic may require re-creating any bucket notifications associated with it. See the Ceph Bucket Notifications documentation https://docs.ceph.com/en/latest/radosgw/notifications/ for details.
+  ~> Ceph Reef (18.x) compatibility: On Ceph Reef, the GetTopicAttributes API returns a limited set of attributes. The provider automatically preserves configured values for attributes that the API does not return (e.g., user, time_to_live, max_retries, retry_sleep_duration, and endpoint arguments). These attributes may appear empty when importing a topic on Reef.
 ---
 
 # radosgw_sns_topic
@@ -11,6 +12,8 @@ description: |-
 Manages an SNS topic in RadosGW for bucket notifications. Topics define push endpoints where bucket event notifications are sent. Supports HTTP, AMQP 0.9.1, and Kafka endpoints.
 
 ~> **Note:** Updating a topic uses `CreateTopic` as an upsert, which replaces **all** topic attributes in a single API call. The provider automatically preserves any existing topic policy (managed by `radosgw_sns_topic_policy`) through updates. However, updating a topic may require re-creating any bucket notifications associated with it. See the [Ceph Bucket Notifications documentation](https://docs.ceph.com/en/latest/radosgw/notifications/) for details.
+
+~> **Ceph Reef (18.x) compatibility:** On Ceph Reef, the `GetTopicAttributes` API returns a limited set of attributes. The provider automatically preserves configured values for attributes that the API does not return (e.g., `user`, `time_to_live`, `max_retries`, `retry_sleep_duration`, and endpoint arguments). These attributes may appear empty when importing a topic on Reef.
 
 ## Example Usage
 
@@ -76,7 +79,7 @@ The following arguments are supported:
 * `cloudevents` - (Optional) Whether HTTP headers should include attributes according to the [S3 CloudEvents Spec](https://github.com/cloudevents/spec/blob/main/cloudevents/adapters/aws-s3.md). Only applicable to HTTP endpoints. Default is `false`.
 * `kafka_ack_level` - (Optional) Kafka acknowledgement level. Valid values: `none`, `broker`. Default is `broker`.
 * `kafka_brokers` - (Optional) Comma-separated list of Kafka brokers in `host:port` format. Added to the Kafka URI to support Kafka clusters.
-* `max_retries` - (Optional) Maximum number of retries before expiring a notification. Only applicable when `persistent` is `true`. Zero means infinite.
+* `max_retries` - (Optional) Maximum number of retries before expiring a notification. Only applicable when `persistent` is `true`. Zero means infinite. Not returned by `GetTopicAttributes` on Ceph Reef (18.x); the configured value is preserved in state.
 * `mechanism` - (Optional) SASL mechanism for Kafka authentication. Supported values: `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`, `GSSAPI`, `OAUTHBEARER`. Default is `PLAIN`.
 * `opaque_data` - (Optional) Opaque data set in the topic configuration and added to all notifications triggered by the topic.
 * `password` - (Optional) Password for broker authentication. Overrides the password in the endpoint URI if both are provided. Must be transmitted over HTTPS.
@@ -85,8 +88,8 @@ The following arguments are supported:
   - HTTP: `http[s]://<fqdn>[:<port>]`
   - AMQP 0.9.1: `amqp[s]://[<user>:<password>@]<fqdn>[:<port>][/<vhost>]`
   - Kafka: `kafka://[<user>:<password>@]<fqdn>[:<port>]`
-* `retry_sleep_duration` - (Optional) Time in seconds between notification delivery retries. Only applicable when `persistent` is `true`. Zero means no delay.
-* `time_to_live` - (Optional) Maximum time in seconds to retain notifications. Only applicable when `persistent` is `true`. Zero means infinite.
+* `retry_sleep_duration` - (Optional) Time in seconds between notification delivery retries. Only applicable when `persistent` is `true`. Zero means no delay. Not returned by `GetTopicAttributes` on Ceph Reef (18.x); the configured value is preserved in state.
+* `time_to_live` - (Optional) Maximum time in seconds to retain notifications. Only applicable when `persistent` is `true`. Zero means infinite. Not returned by `GetTopicAttributes` on Ceph Reef (18.x); the configured value is preserved in state.
 * `use_ssl` - (Optional) Whether a secure connection is used to connect to the broker. Applicable to Kafka and AMQP endpoints. Default is `false`.
 * `user_name` - (Optional) Username for broker authentication. Overrides the user in the endpoint URI if both are provided. Must be transmitted over HTTPS.
 * `verify_ssl` - (Optional) Whether the server certificate is validated by the client. Default is `true`.
@@ -99,7 +102,7 @@ The following arguments are supported:
 The following attributes are exported:
 
 * `arn` - The ARN (Amazon Resource Name) of the topic in the format `arn:aws:sns:<zone-group>:<tenant>:<topic>`.
-* `user` - The name of the user that created the topic.
+* `user` - The name of the user that created the topic. Not returned by Ceph Reef (18.x).
 * `name` - See Argument Reference above.
 * `amqp_ack_level` - See Argument Reference above.
 * `amqp_exchange` - See Argument Reference above.

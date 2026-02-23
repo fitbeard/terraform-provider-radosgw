@@ -50,7 +50,9 @@ func (r *SNSTopicPolicyResource) Schema(ctx context.Context, req resource.Schema
 			"~> **Note:** RadosGW's `CreateTopic` API (used for topic updates) replaces all topic " +
 			"attributes, which would normally clear the policy. The `radosgw_sns_topic` resource " +
 			"handles this by reading and re-including the existing policy in every update call, " +
-			"so the policy managed by this resource is preserved through topic changes.",
+			"so the policy managed by this resource is preserved through topic changes.\n\n" +
+			"~> **Ceph version requirement:** This resource requires **Ceph Squid (19.x) or later**. " +
+			"The `SetTopicAttributes` API used to manage topic policies is not available on Ceph Reef (18.x).",
 
 		Attributes: map[string]schema.Attribute{
 			"arn": schema.StringAttribute{
