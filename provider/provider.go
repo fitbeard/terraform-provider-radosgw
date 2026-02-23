@@ -288,8 +288,11 @@ func (p *RadosgwProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewS3BucketLinkResource,
 		NewS3BucketResource,
 		NewS3BucketAclResource,
+		NewS3BucketNotificationResource,
 		NewS3BucketPolicyResource,
 		NewS3BucketLifecycleResource,
+		NewSNSTopicResource,
+		NewSNSTopicPolicyResource,
 	}
 }
 
@@ -307,6 +310,7 @@ func (p *RadosgwProvider) DataSources(ctx context.Context) []func() datasource.D
 		NewIAMQuotaDataSource,
 		NewS3BucketDataSource,
 		NewS3BucketPolicyDataSource,
+		NewSNSTopicDataSource,
 	}
 }
 

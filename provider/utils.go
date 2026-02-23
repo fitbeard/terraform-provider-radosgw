@@ -245,6 +245,60 @@ func (c *IAMClient) parseErrorResponse(statusCode int, body []byte, action strin
 	}
 }
 
+// DoPostRequest executes a signed API request with parameters sent in the
+// POST body as application/x-www-form-urlencoded, rather than in the URL
+// query string.  This is required for SNS CreateTopic because RadosGW only
+// parses Attributes.entry.N.key/value parameters from the POST body.
+func (c *IAMClient) DoPostRequest(ctx context.Context, params url.Values, service string) ([]byte, error) {
+	tflog.Debug(ctx, "Making API POST-body request", map[string]interface{}{
+		"action":   params.Get("Action"),
+		"service":  service,
+		"endpoint": c.Endpoint,
+	})
+
+	encodedBody := params.Encode()
+	req, err := http.NewRequestWithContext(ctx, "POST", c.Endpoint+"/", strings.NewReader(encodedBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Host", req.URL.Host)
+
+	credentials := aws.Credentials{
+		AccessKeyID:     c.AccessKey,
+		SecretAccessKey: c.SecretKey,
+	}
+
+	payloadHash := HashPayload([]byte(encodedBody))
+	err = c.Signer.SignHTTP(ctx, credentials, req, payloadHash, "s3", "", time.Now())
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign request: %w", err)
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	tflog.Debug(ctx, "Received API POST-body response", map[string]interface{}{
+		"status_code": resp.StatusCode,
+		"body":        string(body),
+	})
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, c.parseErrorResponse(resp.StatusCode, body, params.Get("Action"))
+	}
+
+	return body, nil
+}
+
 // HashPayload computes the SHA256 hash of a payload.
 func HashPayload(payload []byte) string {
 	if len(payload) == 0 {
