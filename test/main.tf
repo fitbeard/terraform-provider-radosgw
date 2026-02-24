@@ -16,6 +16,7 @@ terraform {
 
 provider "radosgw" {
   endpoint   = "http://127.0.0.1:7480"
+  # endpoint   = "http://s3.storage.host:7480"
   access_key = "admin"
   secret_key = "secretkey"
 }
