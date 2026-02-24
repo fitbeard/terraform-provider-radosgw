@@ -83,6 +83,11 @@ rgw_frontends = beast port=$RGW_PORT
 rgw_s3_auth_use_sts = true
 rgw_sts_key = 6c524a7c95760b945426019b19988846
 rgw_verify_ssl = false
+rgw_enable_apis = s3,s3website,swift,swift_auth,admin,sts,iam,notifications
+rgw_enable_static_website = true
+# rgw_dns_name = s3.storage.host
+# rgw_dns_s3website_name = s3-website.storage.host
+# rgw_resolve_cname = true
 EOF
 
 # Generate keyring

@@ -30,6 +30,11 @@
     7480,
     8080
   ],
+  "runArgs": [
+    "--add-host=s3.storage.host:127.0.0.1",
+    "--add-host=test-basic-bucket.s3.storage.host:127.0.0.1",
+    "--add-host=test-static-bucket.s3-website.storage.host:127.0.0.1"
+  ],
   "mounts": [
     "source=ceph-bash-history-${devcontainerId},target=/command-history,type=volume",
     "source=ceph-external-files-${devcontainerId},target=/external-files,type=volume"
