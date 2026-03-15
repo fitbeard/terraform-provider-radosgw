@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.2.1](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.2.0...v1.2.1) (2026-03-15)
+
+
+### Bug Fixes
+
+* go transitive dependencies ([#41](https://github.com/fitbeard/terraform-provider-radosgw/issues/41)) ([f501665](https://github.com/fitbeard/terraform-provider-radosgw/commit/f501665316e0dfb7041627415dc014b8ac78e9b9))
+
+
+### Miscellaneous
+
+* **deps:** Bump crazy-max/ghaction-import-gpg from 6.3.0 to 7.0.0 ([#31](https://github.com/fitbeard/terraform-provider-radosgw/issues/31)) ([14523ca](https://github.com/fitbeard/terraform-provider-radosgw/commit/14523caa800d46b5b64606e66aaae3f37ff01657))
+* **deps:** Bump github.com/aws/aws-sdk-go-v2/credentials ([#35](https://github.com/fitbeard/terraform-provider-radosgw/issues/35)) ([ba60c46](https://github.com/fitbeard/terraform-provider-radosgw/commit/ba60c46190de6f14957b5c69bcbc927cdc19c6b9))
+* **deps:** Bump github.com/aws/aws-sdk-go-v2/service/s3 ([#28](https://github.com/fitbeard/terraform-provider-radosgw/issues/28)) ([fb88338](https://github.com/fitbeard/terraform-provider-radosgw/commit/fb883385d5fce46baa937761ce5ee48aab55654c))
+* **deps:** Bump github.com/aws/aws-sdk-go-v2/service/s3 ([#32](https://github.com/fitbeard/terraform-provider-radosgw/issues/32)) ([1094041](https://github.com/fitbeard/terraform-provider-radosgw/commit/10940414bc26f32c270d24a89ae57a10726f71b0))
+* **deps:** Bump github.com/cloudflare/circl from 1.6.1 to 1.6.3 ([#30](https://github.com/fitbeard/terraform-provider-radosgw/issues/30)) ([886ecfd](https://github.com/fitbeard/terraform-provider-radosgw/commit/886ecfd3aa65c60635270d658a178f7d5b964255))
+* **deps:** Bump github.com/hashicorp/terraform-plugin-framework ([#34](https://github.com/fitbeard/terraform-provider-radosgw/issues/34)) ([0f2f7f0](https://github.com/fitbeard/terraform-provider-radosgw/commit/0f2f7f0a318efe46f30c70de75e26f549e0cb085))
+* **deps:** Bump github.com/hashicorp/terraform-plugin-go ([#29](https://github.com/fitbeard/terraform-provider-radosgw/issues/29)) ([3c6cd8b](https://github.com/fitbeard/terraform-provider-radosgw/commit/3c6cd8b4fa573365cf638932b2b66615dc1004b2))
+* **deps:** Bump github.com/hashicorp/terraform-plugin-sdk/v2 ([#33](https://github.com/fitbeard/terraform-provider-radosgw/issues/33)) ([f72b55b](https://github.com/fitbeard/terraform-provider-radosgw/commit/f72b55b2d285b11aa502ff719def022e0319d1d7))
+* **deps:** Bump goreleaser/goreleaser-action from 6 to 7 ([#26](https://github.com/fitbeard/terraform-provider-radosgw/issues/26)) ([2da4476](https://github.com/fitbeard/terraform-provider-radosgw/commit/2da4476e652154524e9e15262f0e91fbf518dc32))
+* **deps:** Bump hashicorp/setup-terraform from 3 to 4 ([#27](https://github.com/fitbeard/terraform-provider-radosgw/issues/27)) ([b78faaf](https://github.com/fitbeard/terraform-provider-radosgw/commit/b78faafeaf81a8ad73c0c1e002a41b69d920d59c))
+
 ## [1.2.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.1.0...v1.2.0) (2026-02-24)
 
 
