@@ -198,6 +198,11 @@ resource "radosgw_iam_openid_connect_provider" "test" {
   thumbprint_list = [
     "1234567890abcdef1234567890abcdef12345678"
   ]
+
+  # Disable in-place updates so that any drift detected after the import step
+  # triggers resource replacement rather than calling Update APIs that are not
+  # supported on Ceph Reef (18.x).
+  allow_updates = false
 }
 `, providerURL)
 }
@@ -212,6 +217,10 @@ resource "radosgw_iam_openid_connect_provider" "test" {
   thumbprint_list = [
     "1234567890abcdef1234567890abcdef12345678"
   ]
+
+  # Disable in-place updates so that any drift triggers replacement rather than
+  # calling Update APIs unsupported on Ceph Reef (18.x).
+  allow_updates = false
 }
 `, providerURL)
 }
