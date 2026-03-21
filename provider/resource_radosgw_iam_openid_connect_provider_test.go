@@ -188,6 +188,17 @@ func testAccCheckRadosgwIAMOIDCProviderDestroy(s *terraform.State) error {
 
 // Test configurations
 
+// allowUpdatesAttrForReef returns an HCL attribute line that sets
+// allow_updates = false when running on Ceph Reef (18.x), and an empty string
+// otherwise.  This prevents the import-verify step from triggering Update APIs
+// that are not supported on Reef and would hang instead of returning 405.
+func allowUpdatesAttrForReef() string {
+	if getCephVersion() == CephVersion_Reef {
+		return "  allow_updates = false\n"
+	}
+	return ""
+}
+
 func testAccRadosgwIAMOIDCProviderConfig_basic(providerURL string) string {
 	return providerConfig() + fmt.Sprintf(`
 resource "radosgw_iam_openid_connect_provider" "test" {
@@ -198,13 +209,8 @@ resource "radosgw_iam_openid_connect_provider" "test" {
   thumbprint_list = [
     "1234567890abcdef1234567890abcdef12345678"
   ]
-
-  # Disable in-place updates so that any drift detected after the import step
-  # triggers resource replacement rather than calling Update APIs that are not
-  # supported on Ceph Reef (18.x).
-  allow_updates = false
-}
-`, providerURL)
+%s}
+`, providerURL, allowUpdatesAttrForReef())
 }
 
 func testAccRadosgwIAMOIDCProviderConfig_multipleClientIDs(providerURL string) string {
@@ -217,12 +223,8 @@ resource "radosgw_iam_openid_connect_provider" "test" {
   thumbprint_list = [
     "1234567890abcdef1234567890abcdef12345678"
   ]
-
-  # Disable in-place updates so that any drift triggers replacement rather than
-  # calling Update APIs unsupported on Ceph Reef (18.x).
-  allow_updates = false
-}
-`, providerURL)
+%s}
+`, providerURL, allowUpdatesAttrForReef())
 }
 
 func testAccRadosgwIAMOIDCProviderConfig_allowUpdates(providerURL string, allowUpdates bool) string {
