@@ -96,17 +96,6 @@ func parseCephVersion(version string) CephVersion {
 	return CephVersion_Unknown
 }
 
-// allowUpdatesAttrForReef returns an HCL attribute snippet that sets
-// allow_updates = false on Ceph Reef (18.x) to prevent calling Update APIs
-// that are unsupported on Reef and hang instead of returning 405.
-// Returns an empty string on all other Ceph versions.
-func allowUpdatesAttrForReef() string {
-	if getCephVersion() == CephVersion_Reef {
-		return "\n  allow_updates = false"
-	}
-	return ""
-}
-
 // randomName generates a random name with the given prefix for test resources.
 func randomName(prefix string) string {
 	return acctest.RandomWithPrefix(prefix)

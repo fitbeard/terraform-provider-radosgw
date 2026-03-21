@@ -189,6 +189,9 @@ func testAccCheckRadosgwIAMOIDCProviderDestroy(s *terraform.State) error {
 // Test configurations
 
 func testAccRadosgwIAMOIDCProviderConfig_basic(providerURL string) string {
+	if getCephVersion() == CephVersion_Reef {
+		return testAccRadosgwIAMOIDCProviderConfig_allowUpdates(providerURL, false)
+	}
 	return providerConfig() + fmt.Sprintf(`
 resource "radosgw_iam_openid_connect_provider" "test" {
   url = %q
@@ -197,9 +200,9 @@ resource "radosgw_iam_openid_connect_provider" "test" {
 
   thumbprint_list = [
     "1234567890abcdef1234567890abcdef12345678"
-  ]%s
+  ]
 }
-`, providerURL, allowUpdatesAttrForReef())
+`, providerURL)
 }
 
 func testAccRadosgwIAMOIDCProviderConfig_multipleClientIDs(providerURL string) string {
@@ -211,9 +214,9 @@ resource "radosgw_iam_openid_connect_provider" "test" {
 
   thumbprint_list = [
     "1234567890abcdef1234567890abcdef12345678"
-  ]%s
+  ]
 }
-`, providerURL, allowUpdatesAttrForReef())
+`, providerURL)
 }
 
 func testAccRadosgwIAMOIDCProviderConfig_allowUpdates(providerURL string, allowUpdates bool) string {
