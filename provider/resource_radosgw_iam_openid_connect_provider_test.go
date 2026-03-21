@@ -73,7 +73,7 @@ func TestAccRadosgwIAMOIDCProvider_allowUpdatesTrue(t *testing.T) {
 	providerURL := fmt.Sprintf("https://%s-update.example.com", suffix)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Tentacle) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMOIDCProviderDestroy,
 		Steps: []resource.TestStep{
@@ -189,20 +189,7 @@ func testAccCheckRadosgwIAMOIDCProviderDestroy(s *terraform.State) error {
 // Test configurations
 
 func testAccRadosgwIAMOIDCProviderConfig_basic(providerURL string) string {
-	if getCephVersion() == CephVersion_Reef {
-		return testAccRadosgwIAMOIDCProviderConfig_allowUpdates(providerURL, false)
-	}
-	return providerConfig() + fmt.Sprintf(`
-resource "radosgw_iam_openid_connect_provider" "test" {
-  url = %q
-
-  client_id_list = ["test-client-id"]
-
-  thumbprint_list = [
-    "1234567890abcdef1234567890abcdef12345678"
-  ]
-}
-`, providerURL)
+	return testAccRadosgwIAMOIDCProviderConfig_allowUpdates(providerURL, false)
 }
 
 func testAccRadosgwIAMOIDCProviderConfig_multipleClientIDs(providerURL string) string {
