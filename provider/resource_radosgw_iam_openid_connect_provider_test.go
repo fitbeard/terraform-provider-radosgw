@@ -19,7 +19,9 @@ func TestAccRadosgwIAMOIDCProvider_basic(t *testing.T) {
 	providerARN := fmt.Sprintf("arn:aws:iam:::oidc-provider/%s-test.example.com", suffix)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		// The import step triggers an update (allow_updates defaults to true after import)
+		// which calls APIs unsupported on Reef/Squid, causing hangs.
+		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Tentacle) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMOIDCProviderDestroy,
 		Steps: []resource.TestStep{
@@ -73,7 +75,8 @@ func TestAccRadosgwIAMOIDCProvider_allowUpdatesTrue(t *testing.T) {
 	providerURL := fmt.Sprintf("https://%s-update.example.com", suffix)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		// allow_updates=true enables in-place update APIs unsupported on Reef/Squid
+		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Tentacle) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMOIDCProviderDestroy,
 		Steps: []resource.TestStep{
@@ -141,6 +144,7 @@ func TestAccRadosgwIAMOIDCProvider_allowUpdatesFalse(t *testing.T) {
 
 	suffix := randomName("oidc")
 	providerURL := fmt.Sprintf("https://%s-noupdate.example.com", suffix)
+	providerARN := fmt.Sprintf("arn:aws:iam:::oidc-provider/%s-noupdate.example.com", suffix)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -153,6 +157,16 @@ func TestAccRadosgwIAMOIDCProvider_allowUpdatesFalse(t *testing.T) {
 					testAccCheckRadosgwIAMOIDCProviderExists("radosgw_iam_openid_connect_provider.test"),
 					resource.TestCheckResourceAttr("radosgw_iam_openid_connect_provider.test", "allow_updates", "false"),
 				),
+			},
+			// Import test - safe on all Ceph versions: client_id_list and thumbprint_list
+			// are unchanged after import, so no update API calls are triggered
+			{
+				ResourceName:                         "radosgw_iam_openid_connect_provider.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIgnore:              []string{"allow_updates"},
+				ImportStateId:                        providerARN,
+				ImportStateVerifyIdentifierAttribute: "arn",
 			},
 		},
 	})
