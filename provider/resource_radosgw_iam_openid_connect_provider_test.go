@@ -73,7 +73,7 @@ func TestAccRadosgwIAMOIDCProvider_allowUpdatesTrue(t *testing.T) {
 	providerURL := fmt.Sprintf("https://%s-update.example.com", suffix)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Tentacle) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMOIDCProviderDestroy,
 		Steps: []resource.TestStep{
@@ -198,8 +198,8 @@ resource "radosgw_iam_openid_connect_provider" "test" {
   thumbprint_list = [
     "1234567890abcdef1234567890abcdef12345678"
   ]
-}
-`, providerURL)
+%s}
+`, providerURL, allowUpdatesAttrBelowTentacle())
 }
 
 func testAccRadosgwIAMOIDCProviderConfig_multipleClientIDs(providerURL string) string {

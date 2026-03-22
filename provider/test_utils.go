@@ -115,3 +115,16 @@ provider "radosgw" {
 }
 `
 }
+
+// allowUpdatesAttrBelowTentacle returns an HCL attribute fragment that sets
+// allow_updates = false when running against a Ceph version older than
+// Tentacle (i.e. Reef 18.x, Squid 19.x).  On those releases the in-place
+// OIDC update APIs are unsupported and would cause test timeouts.
+// Returns an empty string on Tentacle (20.x) and newer so the schema default
+// (true) applies as normal.
+func allowUpdatesAttrBelowTentacle() string {
+	if getCephVersion().LessThan(CephVersion_Tentacle) {
+		return "  allow_updates = false\n"
+	}
+	return ""
+}

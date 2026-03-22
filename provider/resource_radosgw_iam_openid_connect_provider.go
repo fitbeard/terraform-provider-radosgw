@@ -327,6 +327,10 @@ func (r *OIDCProviderResource) Read(ctx context.Context, req resource.ReadReques
 
 	state.URL = types.StringValue(response.Result.URL)
 
+	// allow_updates is a client-side-only attribute not returned by the RadosGW
+	// API.  state.AllowUpdates is already populated from req.State.Get above, so
+	// it is preserved as-is here and must not be overwritten.
+
 	clientIDSet, diags := types.SetValueFrom(ctx, types.StringType, response.Result.ClientIDList.Members)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
