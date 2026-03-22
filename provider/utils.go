@@ -71,6 +71,26 @@ func retryOnConcurrentModification(ctx context.Context, operation string, fn fun
 	return err
 }
 
+// retryOnNotFound wraps an operation with retry logic for transient "not found" errors.
+// This handles eventual consistency on older Ceph versions (e.g. Reef) where a resource
+// may not be immediately visible after creation.
+func retryOnNotFound(ctx context.Context, operation string, isNotFound func(error) bool, fn func() error) error {
+	return retry.RetryContext(ctx, DefaultOperationTimeout, func() *retry.RetryError {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+		if isNotFound(err) {
+			tflog.Debug(ctx, "Resource not yet visible, retrying", map[string]any{
+				"operation": operation,
+				"error":     err.Error(),
+			})
+			return retry.RetryableError(err)
+		}
+		return retry.NonRetryableError(err)
+	})
+}
+
 // =============================================================================
 // IAM Client and AWS SigV4 Signing
 // =============================================================================
@@ -180,6 +200,13 @@ type IAMErrorResponse struct {
 	RequestID string `xml:"RequestId"`
 }
 
+// S3ErrorResponse represents an S3-style error response (used for SNS).
+type S3ErrorResponse struct {
+	XMLName xml.Name `xml:"Error"`
+	Code    string   `xml:"Code"`
+	Message string   `xml:"Message"`
+}
+
 // IAMError represents a parsed IAM API error.
 type IAMError struct {
 	Code       string
@@ -225,12 +252,23 @@ func (c *IAMClient) parseErrorResponse(statusCode int, body []byte, action strin
 		}
 	}
 
-	// Try to parse XML error response
+	// Try to parse XML error response (IAM-style <ErrorResponse>)
 	var errResp IAMErrorResponse
 	if err := xml.Unmarshal(body, &errResp); err == nil && errResp.Error.Code != "" {
 		return &IAMError{
 			Code:       errResp.Error.Code,
 			Message:    errResp.Error.Message,
+			StatusCode: statusCode,
+			Action:     action,
+		}
+	}
+
+	// Try to parse S3-style <Error> response (e.g. SNS returns this format)
+	var s3Err S3ErrorResponse
+	if err := xml.Unmarshal(body, &s3Err); err == nil && s3Err.Code != "" {
+		return &IAMError{
+			Code:       s3Err.Code,
+			Message:    s3Err.Message,
 			StatusCode: statusCode,
 			Action:     action,
 		}

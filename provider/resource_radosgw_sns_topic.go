@@ -351,7 +351,14 @@ func (r *SNSTopicResource) Create(ctx context.Context, req resource.CreateReques
 	plan.ARN = types.StringValue(response.Result.TopicArn)
 
 	// Read back to populate computed fields (user, etc.)
-	topicAttrs, err := r.readTopic(ctx, plan.ARN.ValueString())
+	// Retry on 404 — on Reef under load, GetTopicAttributes can briefly
+	// return NoSuchKey right after a successful CreateTopic.
+	var topicAttrs *snsTopicAttributes
+	err = retryOnNotFound(ctx, "GetTopicAttributes", isSNSTopicNotFound, func() error {
+		var readErr error
+		topicAttrs, readErr = r.readTopic(ctx, plan.ARN.ValueString())
+		return readErr
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading Created Topic",
