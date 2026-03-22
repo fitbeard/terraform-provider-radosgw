@@ -19,7 +19,10 @@ func TestAccRadosgwIAMOIDCProvider_basic(t *testing.T) {
 	providerARN := fmt.Sprintf("arn:aws:iam:::oidc-provider/%s-test.example.com", suffix)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		// Skip on Ceph versions older than Tentacle: the import step triggers an update
+		// that hangs on Reef/Squid. Use TestAccRadosgwIAMOIDCProvider_allowUpdatesFalse
+		// to cover basic creation on those versions.
+		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Tentacle) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMOIDCProviderDestroy,
 		Steps: []resource.TestStep{
@@ -189,7 +192,17 @@ func testAccCheckRadosgwIAMOIDCProviderDestroy(s *terraform.State) error {
 // Test configurations
 
 func testAccRadosgwIAMOIDCProviderConfig_basic(providerURL string) string {
-	return testAccRadosgwIAMOIDCProviderConfig_allowUpdates(providerURL, false)
+	return providerConfig() + fmt.Sprintf(`
+resource "radosgw_iam_openid_connect_provider" "test" {
+  url = %q
+
+  client_id_list = ["test-client-id"]
+
+  thumbprint_list = [
+    "1234567890abcdef1234567890abcdef12345678"
+  ]
+}
+`, providerURL)
 }
 
 func testAccRadosgwIAMOIDCProviderConfig_multipleClientIDs(providerURL string) string {
