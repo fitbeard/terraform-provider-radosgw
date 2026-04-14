@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.2.2](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.2.1...v1.2.2) (2026-04-14)
+
+
+### Miscellaneous
+
+* **deps:** Bump github.com/aws/aws-sdk-go-v2/service/s3 ([#49](https://github.com/fitbeard/terraform-provider-radosgw/issues/49)) ([f0fa9b3](https://github.com/fitbeard/terraform-provider-radosgw/commit/f0fa9b376f595e253665f4df140c077ca4d8f2d7))
+* **deps:** Bump github.com/aws/smithy-go from 1.24.2 to 1.24.3 ([#55](https://github.com/fitbeard/terraform-provider-radosgw/issues/55)) ([4b3b2c4](https://github.com/fitbeard/terraform-provider-radosgw/commit/4b3b2c483b8ad47145bb4c2e05422d5c6a62b863))
+* **deps:** Bump the aws-sdk group with 3 updates ([#57](https://github.com/fitbeard/terraform-provider-radosgw/issues/57)) ([bb0d8b4](https://github.com/fitbeard/terraform-provider-radosgw/commit/bb0d8b438a637e63d01c7b426a4284306a17541c))
+* group dependabot changes ([#56](https://github.com/fitbeard/terraform-provider-radosgw/issues/56)) ([64d3f34](https://github.com/fitbeard/terraform-provider-radosgw/commit/64d3f342a32c61ffe12276145df187d3c09acc38))
+
 ## [1.2.1](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.2.0...v1.2.1) (2026-03-22)
 
 
