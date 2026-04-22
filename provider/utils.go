@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/smithy-go"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 )
@@ -344,4 +346,20 @@ func HashPayload(payload []byte) string {
 	}
 	hash := sha256.Sum256(payload)
 	return hex.EncodeToString(hash[:])
+}
+
+func isAccountNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.ErrorCode() {
+		case "NoSuchKey", "NoSuchAccount":
+			return true
+		}
+	}
+	// fallback if you're currently string-matching
+	msg := err.Error()
+	return strings.Contains(msg, "NoSuchKey") || strings.Contains(msg, "NoSuchAccount")
 }

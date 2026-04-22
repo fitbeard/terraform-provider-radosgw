@@ -51,6 +51,8 @@ The following arguments are supported:
 * `user_id` - (Required) The local user ID. For tenant users, this remains the user name without the tenant prefix; use `id` when another resource needs the tenant-qualified RGW user ID.
 
 
+* `account_id` - (Optional) The account ID to associate the user with. When specified, the user is created within the account context.
+* `account_root` - (Optional) Whether this user is the root user for the account. Only valid when `account_id` is set.
 * `default_placement` - (Optional) The default placement for the user's buckets. Note: Once set, this field cannot be cleared, only changed to a different value.
 * `email` - (Optional) The email address of the user. Note: Once set, this field cannot be cleared, only changed to a different value.
 * `max_buckets` - (Optional) The maximum number of buckets the user can own. Default is 1000.
@@ -70,6 +72,8 @@ The following attributes are exported:
 * `type` - The user type (e.g., 'rgw', 'ldap').
 * `display_name` - See Argument Reference above.
 * `user_id` - See Argument Reference above.
+* `account_id` - See Argument Reference above.
+* `account_root` - See Argument Reference above.
 * `default_placement` - See Argument Reference above.
 * `email` - See Argument Reference above.
 * `max_buckets` - See Argument Reference above.

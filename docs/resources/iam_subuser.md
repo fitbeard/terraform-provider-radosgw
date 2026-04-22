@@ -61,6 +61,7 @@ The following arguments are supported:
 
 
 * `access` - (Optional) Access level for the subuser. Valid values: `read`, `write`, `read-write`, `full-control`. Default: `read`.
+* `account_id` - (Optional) The account ID to associate the subuser with. When specified, the subuser is created within the account context.
 
 
 
@@ -74,6 +75,7 @@ The following attributes are exported:
 * `subuser` - See Argument Reference above.
 * `user_id` - See Argument Reference above.
 * `access` - See Argument Reference above.
+* `account_id` - See Argument Reference above.
 ## Import
 
 Import is supported using the following syntax:

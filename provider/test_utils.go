@@ -101,6 +101,10 @@ func randomName(prefix string) string {
 	return acctest.RandomWithPrefix(prefix)
 }
 
+func randomAccountID() string {
+	return acctest.RandStringFromCharSet(17, "0123456789")
+}
+
 // randomEmail generates a random email address for test resources.
 func randomEmail() string {
 	return fmt.Sprintf("%s@example.com", acctest.RandString(10))

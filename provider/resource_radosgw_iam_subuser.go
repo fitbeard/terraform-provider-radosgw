@@ -43,8 +43,10 @@ func accessFromAPI(access string) string {
 }
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &SubuserResource{}
-var _ resource.ResourceWithImportState = &SubuserResource{}
+var (
+	_ resource.Resource                = &SubuserResource{}
+	_ resource.ResourceWithImportState = &SubuserResource{}
+)
 
 func NewIAMSubuserResource() resource.Resource {
 	return &SubuserResource{}
@@ -58,6 +60,7 @@ type SubuserResource struct {
 // SubuserResourceModel describes the resource data model.
 type SubuserResourceModel struct {
 	UserID    types.String `tfsdk:"user_id"`
+	AccountID types.String `tfsdk:"account_id"`
 	Subuser   types.String `tfsdk:"subuser"`
 	Access    types.String `tfsdk:"access"`
 	SecretKey types.String `tfsdk:"secret_key"`
@@ -80,6 +83,14 @@ func (r *SubuserResource) Schema(ctx context.Context, req resource.SchemaRequest
 			"user_id": schema.StringAttribute{
 				MarkdownDescription: "The parent user ID.",
 				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"account_id": schema.StringAttribute{
+				MarkdownDescription: "The account ID to associate the subuser with. When specified, the subuser is created within the account context.",
+				Optional:            true,
+				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -163,6 +174,7 @@ func (r *SubuserResource) Create(ctx context.Context, req resource.CreateRequest
 	tflog.Debug(ctx, "Creating subuser", map[string]any{
 		"user_id":          userID,
 		"resolved_user_id": resolvedUserID,
+		"account_id":       data.AccountID.ValueString(),
 		"subuser":          data.Subuser.ValueString(),
 		"full_id":          fullSubuserID,
 		"access":           data.Access.ValueString(),
@@ -176,14 +188,19 @@ func (r *SubuserResource) Create(ctx context.Context, req resource.CreateRequest
 		Access: admin.SubuserAccess(accessToAPI(data.Access.ValueString())),
 	}
 
+	user := admin.User{
+		ID:        resolvedUserID,
+		AccountID: data.AccountID.ValueString(),
+	}
+
 	tflog.Debug(ctx, "CreateSubuser parameters", map[string]any{
 		"subuser_spec": fmt.Sprintf("%+v", subuser),
+		"user":         fmt.Sprintf("%+v", user),
 	})
 
 	err = retryOnConcurrentModification(ctx, fmt.Sprintf("CreateSubuser %s", fullSubuserID), func() error {
-		return r.client.Admin.CreateSubuser(ctx, admin.User{ID: resolvedUserID}, subuser)
+		return r.client.Admin.CreateSubuser(ctx, user, subuser)
 	})
-
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating Subuser",
@@ -197,7 +214,7 @@ func (r *SubuserResource) Create(ctx context.Context, req resource.CreateRequest
 	// For production deployments with key rotation requirements, users should manage keys explicitly
 	// using the separate radosgw_iam_access_key resource. This gives users both simplicity (auto-key) and
 	// control (explicit key management) following Terraform best practices (similar to AWS IAM user vs access key).
-	user, err := r.client.Admin.GetUser(ctx, admin.User{ID: resolvedUserID})
+	userInfo, err := r.client.Admin.GetUser(ctx, admin.User{ID: resolvedUserID})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading User After Subuser Creation",
@@ -208,7 +225,7 @@ func (r *SubuserResource) Create(ctx context.Context, req resource.CreateRequest
 
 	// Find and store the auto-generated Swift secret key
 	// Note: Ceph automatically generates exactly one Swift key per subuser upon creation
-	for _, key := range user.SwiftKeys {
+	for _, key := range userInfo.SwiftKeys {
 		if key.User == fullSubuserID {
 			data.SecretKey = types.StringValue(key.SecretKey)
 			tflog.Debug(ctx, "Retrieved auto-generated Swift secret key", map[string]any{
@@ -220,6 +237,7 @@ func (r *SubuserResource) Create(ctx context.Context, req resource.CreateRequest
 
 	// Set computed fields
 	data.FullID = types.StringValue(fullSubuserID)
+	data.AccountID = types.StringValue(userInfo.AccountID)
 
 	tflog.Trace(ctx, "Created subuser")
 
@@ -303,6 +321,7 @@ func (r *SubuserResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	// Ensure computed fields are set
 	data.FullID = types.StringValue(fullSubuserID)
+	data.AccountID = types.StringValue(user.AccountID)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -337,6 +356,7 @@ func (r *SubuserResource) Update(ctx context.Context, req resource.UpdateRequest
 	tflog.Debug(ctx, "Updating subuser", map[string]any{
 		"user_id":          userID,
 		"resolved_user_id": resolvedUserID,
+		"account_id":       data.AccountID.ValueString(),
 		"full_id":          fullSubuserID,
 		"access":           data.Access.ValueString(),
 	})
@@ -347,10 +367,14 @@ func (r *SubuserResource) Update(ctx context.Context, req resource.UpdateRequest
 		Access: admin.SubuserAccess(accessToAPI(data.Access.ValueString())),
 	}
 
-	err = retryOnConcurrentModification(ctx, fmt.Sprintf("ModifySubuser %s", fullSubuserID), func() error {
-		return r.client.Admin.ModifySubuser(ctx, admin.User{ID: resolvedUserID}, subuser)
-	})
+	user := admin.User{
+		ID:        resolvedUserID,
+		AccountID: data.AccountID.ValueString(),
+	}
 
+	err = retryOnConcurrentModification(ctx, fmt.Sprintf("ModifySubuser %s", fullSubuserID), func() error {
+		return r.client.Admin.ModifySubuser(ctx, user, subuser)
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating Subuser",
@@ -361,6 +385,7 @@ func (r *SubuserResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	// Preserve the key while refreshing the computed full ID from the resolved user.
 	data.FullID = types.StringValue(fullSubuserID)
+	data.AccountID = state.AccountID
 	data.SecretKey = state.SecretKey
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -401,10 +426,14 @@ func (r *SubuserResource) Delete(ctx context.Context, req resource.DeleteRequest
 		PurgeKeys: &purgeKeys, // Purge associated keys
 	}
 
-	err = retryOnConcurrentModification(ctx, fmt.Sprintf("RemoveSubuser %s", fullSubuserID), func() error {
-		return r.client.Admin.RemoveSubuser(ctx, admin.User{ID: resolvedUserID}, subuser)
-	})
+	user := admin.User{
+		ID:        resolvedUserID,
+		AccountID: data.AccountID.ValueString(),
+	}
 
+	err = retryOnConcurrentModification(ctx, fmt.Sprintf("RemoveSubuser %s", fullSubuserID), func() error {
+		return r.client.Admin.RemoveSubuser(ctx, user, subuser)
+	})
 	if err != nil {
 		// Ignore error if user or subuser doesn't exist
 		if !errors.Is(err, admin.ErrNoSuchUser) && !errors.Is(err, admin.ErrNoSuchSubUser) {

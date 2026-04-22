@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Transform tfplugindocs Schema format to traditional Argument Reference format
 # Usage: ./scripts/transform-docs.sh [docs_dir]
 

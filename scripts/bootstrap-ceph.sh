@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 # Ceph cluster bootstrap script for development
@@ -181,7 +181,7 @@ for i in $(seq 0 $((NUM_OSDS - 1))); do
     ceph-osd --conf "$CEPH_DIR/ceph.conf" \
         --id "$i" \
         --mkfs
-    
+
     nohup ceph-osd --conf "$CEPH_DIR/ceph.conf" \
         --id "$i" \
         --foreground \

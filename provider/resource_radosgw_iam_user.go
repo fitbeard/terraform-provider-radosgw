@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -20,8 +21,10 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &UserResource{}
-var _ resource.ResourceWithImportState = &UserResource{}
+var (
+	_ resource.Resource                = &UserResource{}
+	_ resource.ResourceWithImportState = &UserResource{}
+)
 
 func NewIAMUserResource() resource.Resource {
 	return &UserResource{}
@@ -36,6 +39,8 @@ type UserResource struct {
 type UserResourceModel struct {
 	ID                  types.String `tfsdk:"id"`
 	UserID              types.String `tfsdk:"user_id"`
+	AccountID           types.String `tfsdk:"account_id"`
+	AccountRoot         types.Bool   `tfsdk:"account_root"`
 	DisplayName         types.String `tfsdk:"display_name"`
 	Email               types.String `tfsdk:"email"`
 	Tenant              types.String `tfsdk:"tenant"`
@@ -68,6 +73,22 @@ func (r *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"account_id": schema.StringAttribute{
+				MarkdownDescription: "The account ID to associate the user with. When specified, the user is created within the account context.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"account_root": schema.BoolAttribute{
+				MarkdownDescription: "Whether this user is the root user for the account. Only valid when `account_id` is set.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
 				},
 			},
 			"display_name": schema.StringAttribute{
@@ -163,6 +184,12 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
+	var config UserResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if !config.AccountID.IsNull() && data.AccountID.IsNull() {
+		data.AccountID = config.AccountID
+	}
+
 	tflog.Debug(ctx, "Creating RadosGW user", map[string]any{
 		"user_id": data.UserID.ValueString(),
 	})
@@ -177,6 +204,7 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	userConfig := admin.User{
 		ID:               data.UserID.ValueString(),
+		AccountID:        data.AccountID.ValueString(),
 		DisplayName:      data.DisplayName.ValueString(),
 		Email:            data.Email.ValueString(),
 		Tenant:           data.Tenant.ValueString(),
@@ -185,6 +213,11 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 		OpMask:           data.OpMask.ValueString(),
 		DefaultPlacement: data.DefaultPlacement.ValueString(),
 		GenerateKey:      &generateKey,
+	}
+
+	if !data.AccountID.IsNull() && !data.AccountID.IsUnknown() {
+		accountRoot := data.AccountRoot.ValueBool()
+		userConfig.AccountRoot = &accountRoot
 	}
 
 	// Create user with retry logic for ConcurrentModification
@@ -260,6 +293,12 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	var config UserResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if !config.AccountID.IsNull() && data.AccountID.IsNull() {
+		data.AccountID = config.AccountID
 	}
 
 	// Build the full user ID for API calls
@@ -399,11 +438,21 @@ func populateUserResourceModel(data *UserResourceModel, user admin.User) {
 
 	data.ID = types.StringValue(buildFullUserID(userID, tenant))
 	data.UserID = types.StringValue(userID)
+	data.AccountID = types.StringValue(user.AccountID)
+	if user.AccountRoot != nil && *user.AccountRoot {
+		data.AccountRoot = types.BoolValue(true)
+	} else if user.Type == "root" {
+		data.AccountRoot = types.BoolValue(true)
+	} else {
+		data.AccountRoot = types.BoolValue(false)
+	}
+
 	data.DisplayName = types.StringValue(user.DisplayName)
 	data.Email = types.StringValue(user.Email)
 	data.Tenant = types.StringValue(tenant)
 	data.MaxBuckets = types.Int64Value(int64(*user.MaxBuckets))
 	data.Suspended = types.BoolValue(*user.Suspended != 0)
+
 	data.OpMask = types.StringValue(user.OpMask)
 	data.DefaultPlacement = types.StringValue(user.DefaultPlacement)
 	data.DefaultStorageClass = types.StringValue(user.DefaultStorageClass)
