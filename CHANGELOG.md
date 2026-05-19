@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.3](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.2.2...v1.2.3) (2026-05-19)
+
+
+### Bug Fixes
+
+* bump hc-install to fix expired pgp key ([#62](https://github.com/fitbeard/terraform-provider-radosgw/issues/62)) ([c258303](https://github.com/fitbeard/terraform-provider-radosgw/commit/c258303d9ad418208b2a6d30baba4ac82092b9ac))
+* correctly resolve both local and tenant user id ([#71](https://github.com/fitbeard/terraform-provider-radosgw/issues/71)) ([2f337ef](https://github.com/fitbeard/terraform-provider-radosgw/commit/2f337ef04395e5c3b56999e9368bdb662f32bd98))
+
+
+### Miscellaneous
+
+* **deps:** Bump github.com/aws/aws-sdk-go-v2/service/s3 ([#69](https://github.com/fitbeard/terraform-provider-radosgw/issues/69)) ([5ab91ae](https://github.com/fitbeard/terraform-provider-radosgw/commit/5ab91ae1406798f47389f3eb67821650c970d835))
+* **deps:** Bump github.com/aws/smithy-go from 1.25.0 to 1.25.1 ([#66](https://github.com/fitbeard/terraform-provider-radosgw/issues/66)) ([7e17ce6](https://github.com/fitbeard/terraform-provider-radosgw/commit/7e17ce6876fce50e1a528dbeaef5b699a3b680da))
+* **deps:** Bump github.com/ceph/go-ceph from 0.38.0 to 0.39.0 ([#60](https://github.com/fitbeard/terraform-provider-radosgw/issues/60)) ([aca5e97](https://github.com/fitbeard/terraform-provider-radosgw/commit/aca5e97db26bcf032eedd3850bb4f90ce235a720))
+* **deps:** Bump googleapis/release-please-action from 4 to 5 ([#63](https://github.com/fitbeard/terraform-provider-radosgw/issues/63)) ([a39fc5e](https://github.com/fitbeard/terraform-provider-radosgw/commit/a39fc5ea1b96ad77cb2496c5ad035dbced19a923))
+* **deps:** Bump the aws-sdk group across 1 directory with 3 updates ([#68](https://github.com/fitbeard/terraform-provider-radosgw/issues/68)) ([ce2af75](https://github.com/fitbeard/terraform-provider-radosgw/commit/ce2af7547192e8cf533ae71f0d76a67ff50348b6))
+* **deps:** Bump the aws-sdk group with 3 updates ([#59](https://github.com/fitbeard/terraform-provider-radosgw/issues/59)) ([a4f1529](https://github.com/fitbeard/terraform-provider-radosgw/commit/a4f152987de209ec284383b22012fa75f3c672c3))
+* **deps:** Bump the terraform group across 1 directory with 3 updates ([#67](https://github.com/fitbeard/terraform-provider-radosgw/issues/67)) ([14c4dbf](https://github.com/fitbeard/terraform-provider-radosgw/commit/14c4dbf48bcc8b27d5e8b8140d12b0a3fb780e73))
+
 ## [1.2.2](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.2.1...v1.2.2) (2026-04-14)
 
 
