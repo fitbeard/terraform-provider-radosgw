@@ -25,6 +25,7 @@ func TestAccRadosgwIAMUser_basic(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckRadosgwIAMUserExists("radosgw_iam_user.test"),
 					resource.TestCheckResourceAttr("radosgw_iam_user.test", "user_id", userID),
+					resource.TestCheckResourceAttr("radosgw_iam_user.test", "id", userID),
 					resource.TestCheckResourceAttr("radosgw_iam_user.test", "display_name", displayName),
 					resource.TestCheckResourceAttr("radosgw_iam_user.test", "suspended", "false"),
 					resource.TestCheckResourceAttr("radosgw_iam_user.test", "max_buckets", "1000"),
@@ -85,6 +86,7 @@ func TestAccRadosgwIAMUser_withTenant(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckRadosgwIAMUserExistsWithTenant("radosgw_iam_user.test", tenant),
 					resource.TestCheckResourceAttr("radosgw_iam_user.test", "user_id", userID),
+					resource.TestCheckResourceAttr("radosgw_iam_user.test", "id", tenant+"$"+userID),
 					resource.TestCheckResourceAttr("radosgw_iam_user.test", "tenant", tenant),
 				),
 			},
@@ -224,7 +226,7 @@ func testAccCheckRadosgwIAMUserExistsWithTenant(resourceName, tenant string) res
 		}
 
 		// When user has a tenant, the full user ID is "tenant$user_id"
-		fullUserID := tenant + "$" + userID
+		fullUserID := buildFullUserID(userID, tenant)
 		_, err := testAccAdminClient.GetUser(testCtx, admin.User{ID: fullUserID})
 		if err != nil {
 			return fmt.Errorf("error fetching user %s: %s", fullUserID, err)
@@ -244,10 +246,7 @@ func testAccCheckRadosgwIAMUserDestroy(s *terraform.State) error {
 		tenant := rs.Primary.Attributes["tenant"]
 
 		// Build full user ID for API call
-		fullUserID := userID
-		if tenant != "" {
-			fullUserID = tenant + "$" + userID
-		}
+		fullUserID := buildFullUserID(userID, tenant)
 
 		_, err := testAccAdminClient.GetUser(testCtx, admin.User{ID: fullUserID})
 		if err == nil {

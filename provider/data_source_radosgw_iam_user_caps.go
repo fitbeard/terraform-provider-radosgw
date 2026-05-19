@@ -97,13 +97,29 @@ func (d *UserCapsDataSource) Read(ctx context.Context, req datasource.ReadReques
 	}
 
 	userID := config.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, d.client, userID)
+	if err != nil {
+		if errors.Is(err, admin.ErrNoSuchUser) {
+			resp.Diagnostics.AddError(
+				"User Not Found",
+				fmt.Sprintf("User %q does not exist.", userID),
+			)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %q for capabilities lookup: %s", userID, err.Error()),
+		)
+		return
+	}
 
 	tflog.Debug(ctx, "Reading RadosGW user capabilities", map[string]any{
-		"user_id": userID,
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
 	})
 
 	// Get user to retrieve capabilities
-	user, err := d.client.Admin.GetUser(ctx, admin.User{ID: userID})
+	user, err := d.client.Admin.GetUser(ctx, admin.User{ID: resolvedUserID})
 	if err != nil {
 		if errors.Is(err, admin.ErrNoSuchUser) {
 			resp.Diagnostics.AddError(

@@ -360,6 +360,16 @@ func (r *UserCapsResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for capabilities: %s", userID, err.Error()),
+		)
+		return
+	}
+
 	// Convert caps to string format for API
 	capsStr, err := capsToString(ctx, data.Caps)
 	if err != nil {
@@ -371,19 +381,20 @@ func (r *UserCapsResource) Create(ctx context.Context, req resource.CreateReques
 	}
 
 	tflog.Debug(ctx, "Adding user capabilities", map[string]any{
-		"user_id": data.UserID.ValueString(),
-		"caps":    capsStr,
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
+		"caps":             capsStr,
 	})
 
 	// Add capabilities with retry logic for ConcurrentModification
-	err = retryOnConcurrentModification(ctx, fmt.Sprintf("AddUserCap %s", data.UserID.ValueString()), func() error {
-		_, addErr := r.client.Admin.AddUserCap(ctx, data.UserID.ValueString(), capsStr)
+	err = retryOnConcurrentModification(ctx, fmt.Sprintf("AddUserCap %s", resolvedUserID), func() error {
+		_, addErr := r.client.Admin.AddUserCap(ctx, resolvedUserID, capsStr)
 		return addErr
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Adding User Capabilities",
-			fmt.Sprintf("Could not add capabilities for user %s: %s", data.UserID.ValueString(), err.Error()),
+			fmt.Sprintf("Could not add capabilities for user %s: %s", userID, err.Error()),
 		)
 		return
 	}
@@ -417,8 +428,22 @@ func (r *UserCapsResource) Read(ctx context.Context, req resource.ReadRequest, r
 		"user_id": data.UserID.ValueString(),
 	})
 
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		if errors.Is(err, admin.ErrNoSuchUser) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving User Capabilities",
+			fmt.Sprintf("Could not resolve user %s: %s", userID, err.Error()),
+		)
+		return
+	}
+
 	// Get user info to retrieve current capabilities
-	user, err := r.client.Admin.GetUser(ctx, admin.User{ID: data.UserID.ValueString()})
+	user, err := r.client.Admin.GetUser(ctx, admin.User{ID: resolvedUserID})
 	if err != nil {
 		// If user doesn't exist, remove caps from state
 		if errors.Is(err, admin.ErrNoSuchUser) {
@@ -427,7 +452,7 @@ func (r *UserCapsResource) Read(ctx context.Context, req resource.ReadRequest, r
 		}
 		resp.Diagnostics.AddError(
 			"Error Reading User Capabilities",
-			fmt.Sprintf("Could not read user %s: %s", data.UserID.ValueString(), err.Error()),
+			fmt.Sprintf("Could not read user %s: %s", userID, err.Error()),
 		)
 		return
 	}
@@ -464,6 +489,25 @@ func (r *UserCapsResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
+	oldUserID := state.UserID.ValueString()
+	resolvedOldUserID, err := resolveUserID(ctx, r.client, oldUserID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for capabilities update: %s", oldUserID, err.Error()),
+		)
+		return
+	}
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for capabilities update: %s", userID, err.Error()),
+		)
+		return
+	}
+
 	// Convert old caps to string for removal
 	oldCapsStr, err := capsToString(ctx, state.Caps)
 	if err != nil {
@@ -485,21 +529,22 @@ func (r *UserCapsResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 
 	tflog.Debug(ctx, "Updating user capabilities", map[string]any{
-		"user_id":  data.UserID.ValueString(),
-		"old_caps": oldCapsStr,
-		"new_caps": newCapsStr,
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
+		"old_caps":         oldCapsStr,
+		"new_caps":         newCapsStr,
 	})
 
 	// Remove old capabilities with retry logic
 	if oldCapsStr != "" {
-		err = retryOnConcurrentModification(ctx, fmt.Sprintf("RemoveUserCap %s", state.UserID.ValueString()), func() error {
-			_, removeErr := r.client.Admin.RemoveUserCap(ctx, state.UserID.ValueString(), oldCapsStr)
+		err = retryOnConcurrentModification(ctx, fmt.Sprintf("RemoveUserCap %s", resolvedOldUserID), func() error {
+			_, removeErr := r.client.Admin.RemoveUserCap(ctx, resolvedOldUserID, oldCapsStr)
 			return removeErr
 		})
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error Removing Old User Capabilities",
-				fmt.Sprintf("Could not remove old capabilities for user %s: %s", state.UserID.ValueString(), err.Error()),
+				fmt.Sprintf("Could not remove old capabilities for user %s: %s", oldUserID, err.Error()),
 			)
 			return
 		}
@@ -507,14 +552,14 @@ func (r *UserCapsResource) Update(ctx context.Context, req resource.UpdateReques
 
 	// Add new capabilities with retry logic
 	if newCapsStr != "" {
-		err = retryOnConcurrentModification(ctx, fmt.Sprintf("AddUserCap %s", data.UserID.ValueString()), func() error {
-			_, addErr := r.client.Admin.AddUserCap(ctx, data.UserID.ValueString(), newCapsStr)
+		err = retryOnConcurrentModification(ctx, fmt.Sprintf("AddUserCap %s", resolvedUserID), func() error {
+			_, addErr := r.client.Admin.AddUserCap(ctx, resolvedUserID, newCapsStr)
 			return addErr
 		})
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error Adding New User Capabilities",
-				fmt.Sprintf("Could not add new capabilities for user %s: %s", data.UserID.ValueString(), err.Error()),
+				fmt.Sprintf("Could not add new capabilities for user %s: %s", userID, err.Error()),
 			)
 			return
 		}
@@ -543,6 +588,19 @@ func (r *UserCapsResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		if errors.Is(err, admin.ErrNoSuchUser) {
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for capabilities deletion: %s", userID, err.Error()),
+		)
+		return
+	}
+
 	// Convert caps to string for removal
 	capsStr, err := capsToString(ctx, data.Caps)
 	if err != nil {
@@ -554,13 +612,14 @@ func (r *UserCapsResource) Delete(ctx context.Context, req resource.DeleteReques
 	}
 
 	tflog.Debug(ctx, "Removing user capabilities", map[string]any{
-		"user_id": data.UserID.ValueString(),
-		"caps":    capsStr,
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
+		"caps":             capsStr,
 	})
 
 	// Remove capabilities with retry logic
-	err = retryOnConcurrentModification(ctx, fmt.Sprintf("RemoveUserCap %s", data.UserID.ValueString()), func() error {
-		_, removeErr := r.client.Admin.RemoveUserCap(ctx, data.UserID.ValueString(), capsStr)
+	err = retryOnConcurrentModification(ctx, fmt.Sprintf("RemoveUserCap %s", resolvedUserID), func() error {
+		_, removeErr := r.client.Admin.RemoveUserCap(ctx, resolvedUserID, capsStr)
 		return removeErr
 	})
 	if err != nil {
@@ -568,7 +627,7 @@ func (r *UserCapsResource) Delete(ctx context.Context, req resource.DeleteReques
 		if !errors.Is(err, admin.ErrNoSuchUser) {
 			resp.Diagnostics.AddError(
 				"Error Removing User Capabilities",
-				fmt.Sprintf("Could not remove capabilities for user %s: %s", data.UserID.ValueString(), err.Error()),
+				fmt.Sprintf("Could not remove capabilities for user %s: %s", userID, err.Error()),
 			)
 			return
 		}

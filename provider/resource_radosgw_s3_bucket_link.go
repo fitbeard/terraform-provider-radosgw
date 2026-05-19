@@ -122,9 +122,19 @@ func (r *BucketLinkResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
+	uid := data.UID.ValueString()
+	resolvedUID, err := resolveUserID(ctx, r.client, uid)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for bucket link: %s", uid, err.Error()),
+		)
+		return
+	}
+
 	bucketLink := admin.BucketLinkInput{
 		Bucket: data.Bucket.ValueString(),
-		UID:    data.UID.ValueString(),
+		UID:    resolvedUID,
 	}
 
 	if !data.NewBucketName.IsNull() && data.NewBucketName.ValueString() != "" {
@@ -133,18 +143,19 @@ func (r *BucketLinkResource) Create(ctx context.Context, req resource.CreateRequ
 
 	tflog.Debug(ctx, "Linking bucket to user", map[string]any{
 		"bucket":          data.Bucket.ValueString(),
-		"uid":             data.UID.ValueString(),
+		"uid":             uid,
+		"resolved_uid":    resolvedUID,
 		"new_bucket_name": data.NewBucketName.ValueString(),
 	})
 
 	// Link bucket with retry logic for ConcurrentModification
-	err := retryOnConcurrentModification(ctx, fmt.Sprintf("LinkBucket %s to %s", data.Bucket.ValueString(), data.UID.ValueString()), func() error {
+	err = retryOnConcurrentModification(ctx, fmt.Sprintf("LinkBucket %s to %s", data.Bucket.ValueString(), resolvedUID), func() error {
 		return r.client.Admin.LinkBucket(ctx, bucketLink)
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Linking Bucket",
-			fmt.Sprintf("Could not link bucket %s to user %s: %s", data.Bucket.ValueString(), data.UID.ValueString(), err.Error()),
+			fmt.Sprintf("Could not link bucket %s to user %s: %s", data.Bucket.ValueString(), uid, err.Error()),
 		)
 		return
 	}
@@ -185,6 +196,21 @@ func (r *BucketLinkResource) Read(ctx context.Context, req resource.ReadRequest,
 		"uid":    data.UID.ValueString(),
 	})
 
+	uid := data.UID.ValueString()
+	resolvedUID, err := resolveUserID(ctx, r.client, uid)
+	if err != nil {
+		if errors.Is(err, admin.ErrNoSuchUser) {
+			tflog.Info(ctx, "User no longer exists, removing bucket link from state")
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for bucket link: %s", uid, err.Error()),
+		)
+		return
+	}
+
 	// Get the effective bucket name (might have been renamed)
 	effectiveBucketName := data.Bucket.ValueString()
 	if !data.NewBucketName.IsNull() && data.NewBucketName.ValueString() != "" {
@@ -192,7 +218,7 @@ func (r *BucketLinkResource) Read(ctx context.Context, req resource.ReadRequest,
 	}
 
 	// Get user's buckets to verify the link still exists
-	buckets, err := r.client.Admin.ListUsersBuckets(ctx, data.UID.ValueString())
+	buckets, err := r.client.Admin.ListUsersBuckets(ctx, resolvedUID)
 	if err != nil {
 		if errors.Is(err, admin.ErrNoSuchUser) {
 			tflog.Info(ctx, "User no longer exists, removing bucket link from state")
@@ -201,7 +227,7 @@ func (r *BucketLinkResource) Read(ctx context.Context, req resource.ReadRequest,
 		}
 		resp.Diagnostics.AddError(
 			"Error Reading Bucket Link",
-			fmt.Sprintf("Could not list buckets for user %s: %s", data.UID.ValueString(), err.Error()),
+			fmt.Sprintf("Could not list buckets for user %s: %s", uid, err.Error()),
 		)
 		return
 	}
@@ -280,19 +306,43 @@ func (r *BucketLinkResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 	var err error
 	if !data.UnlinkToUID.IsNull() && data.UnlinkToUID.ValueString() != "" {
+		unlinkToUID := data.UnlinkToUID.ValueString()
+		resolvedUnlinkToUID, resolveErr := resolveUserID(ctx, r.client, unlinkToUID)
+		if resolveErr != nil {
+			if errors.Is(resolveErr, admin.ErrNoSuchUser) {
+				return
+			}
+			resp.Diagnostics.AddError(
+				"Error Resolving User",
+				fmt.Sprintf("Could not resolve user %s for bucket relink: %s", unlinkToUID, resolveErr.Error()),
+			)
+			return
+		}
 		// Link bucket to a different user
-		err = retryOnConcurrentModification(ctx, fmt.Sprintf("LinkBucket %s to %s (on destroy)", effectiveBucketName, data.UnlinkToUID.ValueString()), func() error {
+		err = retryOnConcurrentModification(ctx, fmt.Sprintf("LinkBucket %s to %s (on destroy)", effectiveBucketName, resolvedUnlinkToUID), func() error {
 			return r.client.Admin.LinkBucket(ctx, admin.BucketLinkInput{
 				Bucket: effectiveBucketName,
-				UID:    data.UnlinkToUID.ValueString(),
+				UID:    resolvedUnlinkToUID,
 			})
 		})
 	} else {
+		uid := data.UID.ValueString()
+		resolvedUID, resolveErr := resolveUserID(ctx, r.client, uid)
+		if resolveErr != nil {
+			if errors.Is(resolveErr, admin.ErrNoSuchUser) {
+				return
+			}
+			resp.Diagnostics.AddError(
+				"Error Resolving User",
+				fmt.Sprintf("Could not resolve user %s for bucket unlink: %s", uid, resolveErr.Error()),
+			)
+			return
+		}
 		// Unlink bucket from current user
-		err = retryOnConcurrentModification(ctx, fmt.Sprintf("UnlinkBucket %s from %s", effectiveBucketName, data.UID.ValueString()), func() error {
+		err = retryOnConcurrentModification(ctx, fmt.Sprintf("UnlinkBucket %s from %s", effectiveBucketName, resolvedUID), func() error {
 			return r.client.Admin.UnlinkBucket(ctx, admin.BucketLinkInput{
 				Bucket: effectiveBucketName,
-				UID:    data.UID.ValueString(),
+				UID:    resolvedUID,
 			})
 		})
 	}

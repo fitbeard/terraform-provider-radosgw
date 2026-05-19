@@ -80,7 +80,7 @@ The following arguments are supported:
 * `type` - (Required) The quota type to retrieve:
   - `user`: Total quota across all user's buckets combined
   - `bucket`: Per-bucket quota applied to each bucket the user owns
-* `user_id` - (Required) The user ID to retrieve quota for.
+* `user_id` - (Required) The user ID to retrieve quota for. Plain user IDs, tenant-qualified IDs (`tenant$user_id`), and `radosgw_iam_user.user_id` references are supported. A plain ID is used directly when a non-tenant user with that ID exists. If no direct user exists, a local tenant user ID is resolved only when it uniquely matches one tenant user. When both a global user and tenant user share the same local ID, or multiple tenants share that local ID, use `radosgw_iam_user.id` or the tenant-qualified `tenant$user_id` form.
 
 
 

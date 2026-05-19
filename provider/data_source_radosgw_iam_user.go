@@ -118,13 +118,29 @@ func (d *UserDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	}
 
 	userID := config.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, d.client, userID)
+	if err != nil {
+		if errors.Is(err, admin.ErrNoSuchUser) {
+			resp.Diagnostics.AddError(
+				"User Not Found",
+				fmt.Sprintf("User with ID %q does not exist.", userID),
+			)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving RadosGW User",
+			fmt.Sprintf("Could not resolve user %s: %s", userID, err.Error()),
+		)
+		return
+	}
 
 	tflog.Debug(ctx, "Reading RadosGW user data source", map[string]any{
-		"user_id": userID,
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
 	})
 
 	// Get user info
-	user, err := d.client.Admin.GetUser(ctx, admin.User{ID: userID})
+	user, err := d.client.Admin.GetUser(ctx, admin.User{ID: resolvedUserID})
 	if err != nil {
 		if errors.Is(err, admin.ErrNoSuchUser) {
 			resp.Diagnostics.AddError(
@@ -141,7 +157,7 @@ func (d *UserDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	}
 
 	// Populate the model
-	config.UserID = types.StringValue(user.ID)
+	config.UserID = types.StringValue(buildFullUserID(user.ID, user.Tenant))
 	config.DisplayName = types.StringValue(user.DisplayName)
 	config.Email = types.StringValue(user.Email)
 	config.Tenant = types.StringValue(user.Tenant)
