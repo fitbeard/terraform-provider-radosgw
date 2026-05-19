@@ -56,7 +56,7 @@ func (d *QuotaDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 
 		Attributes: map[string]schema.Attribute{
 			"user_id": schema.StringAttribute{
-				MarkdownDescription: "The user ID to retrieve quota for.",
+				MarkdownDescription: "The user ID to retrieve quota for. Plain user IDs, tenant-qualified IDs (`tenant$user_id`), and `radosgw_iam_user.user_id` references are supported. A plain ID is used directly when a non-tenant user with that ID exists. If no direct user exists, a local tenant user ID is resolved only when it uniquely matches one tenant user. When both a global user and tenant user share the same local ID, or multiple tenants share that local ID, use `radosgw_iam_user.id` or the tenant-qualified `tenant$user_id` form.",
 				Required:            true,
 			},
 			"type": schema.StringAttribute{
@@ -115,19 +115,34 @@ func (d *QuotaDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 
 	userID := config.UserID.ValueString()
 	quotaType := config.Type.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, d.client, userID)
+	if err != nil {
+		if errors.Is(err, admin.ErrNoSuchUser) {
+			resp.Diagnostics.AddError(
+				"User Not Found",
+				fmt.Sprintf("User %q does not exist.", userID),
+			)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %q for quota lookup: %s", userID, err.Error()),
+		)
+		return
+	}
 
 	tflog.Debug(ctx, "Reading RadosGW user quota", map[string]any{
-		"user_id": userID,
-		"type":    quotaType,
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
+		"type":             quotaType,
 	})
 
 	// Prepare request to get user's quota
 	reqQuotaSpec := admin.QuotaSpec{
-		UID: userID,
+		UID: resolvedUserID,
 	}
 
 	// Get user-level quota based on type
-	var err error
 	var quotaSpec admin.QuotaSpec
 	if quotaType == "user" {
 		quotaSpec, err = d.client.Admin.GetUserQuota(ctx, reqQuotaSpec)

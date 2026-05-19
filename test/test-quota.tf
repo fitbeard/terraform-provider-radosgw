@@ -2,7 +2,7 @@
 # Quota Resource Tests
 # =============================================================================
 # Purpose: Test radosgw_iam_quota resource with various configurations
-# Resources: 2 users, 4 quotas (user/bucket for each)
+# Resources: 3 users, 5 quotas (user/bucket plus tenant user quota)
 # Dependencies: None (standalone)
 # =============================================================================
 
@@ -80,5 +80,34 @@ output "quota_full_user" {
     enabled     = radosgw_iam_quota.full_user.enabled
     max_size    = radosgw_iam_quota.full_user.max_size
     max_objects = radosgw_iam_quota.full_user.max_objects
+  }
+}
+
+# -----------------------------------------------------------------------------
+# User 3: Test tenant user quota with local user_id reference
+# -----------------------------------------------------------------------------
+resource "radosgw_iam_user" "quota_tenant" {
+  user_id      = "quota-tenant-user"
+  tenant       = "quotatenant"
+  display_name = "Quota Tenant Test User"
+}
+
+# User quota - references user_id, not id, to verify tenant users resolve correctly
+resource "radosgw_iam_quota" "tenant_user" {
+  user_id     = radosgw_iam_user.quota_tenant.user_id
+  type        = "user"
+  enabled     = true
+  max_size    = 10737418240 # 10GB total
+  max_objects = 10000
+}
+
+output "quota_tenant_user" {
+  value = {
+    user_id     = radosgw_iam_user.quota_tenant.user_id
+    rgw_id      = radosgw_iam_user.quota_tenant.id
+    tenant      = radosgw_iam_user.quota_tenant.tenant
+    enabled     = radosgw_iam_quota.tenant_user.enabled
+    max_size    = radosgw_iam_quota.tenant_user.max_size
+    max_objects = radosgw_iam_quota.tenant_user.max_objects
   }
 }

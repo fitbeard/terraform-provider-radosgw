@@ -34,6 +34,7 @@ type UserResource struct {
 
 // UserResourceModel describes the resource data model.
 type UserResourceModel struct {
+	ID                  types.String `tfsdk:"id"`
 	UserID              types.String `tfsdk:"user_id"`
 	DisplayName         types.String `tfsdk:"display_name"`
 	Email               types.String `tfsdk:"email"`
@@ -55,8 +56,15 @@ func (r *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 		MarkdownDescription: "Manages a RadosGW user.",
 
 		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				MarkdownDescription: "The tenant-qualified RGW user ID. For tenant users this is `tenant$user_id`; for non-tenant users this matches `user_id`.",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
 			"user_id": schema.StringAttribute{
-				MarkdownDescription: "The user ID.",
+				MarkdownDescription: "The local user ID. For tenant users, this remains the user name without the tenant prefix; use `id` when another resource needs the tenant-qualified RGW user ID.",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -194,17 +202,9 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	// Update state with created user data
-	data.UserID = types.StringValue(user.ID)
-	data.DisplayName = types.StringValue(user.DisplayName)
-	data.Email = types.StringValue(user.Email)
-	data.Tenant = types.StringValue(user.Tenant)
-	data.MaxBuckets = types.Int64Value(int64(*user.MaxBuckets))
-	data.Suspended = types.BoolValue(*user.Suspended != 0)
-	data.OpMask = types.StringValue(user.OpMask)
-	data.DefaultPlacement = types.StringValue(user.DefaultPlacement)
-	data.DefaultStorageClass = types.StringValue(user.DefaultStorageClass)
-	data.Type = types.StringValue(user.Type)
+	// Update state with created user data. Preserve user_id as configured and
+	// expose the RGW tenant-qualified identifier through id.
+	populateUserResourceModel(&data, user)
 
 	tflog.Trace(ctx, "Created RadosGW user")
 
@@ -246,16 +246,7 @@ func (r *UserResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	}
 
 	// Update state
-	data.UserID = types.StringValue(user.ID)
-	data.DisplayName = types.StringValue(user.DisplayName)
-	data.Email = types.StringValue(user.Email)
-	data.Tenant = types.StringValue(user.Tenant)
-	data.MaxBuckets = types.Int64Value(int64(*user.MaxBuckets))
-	data.Suspended = types.BoolValue(*user.Suspended != 0)
-	data.OpMask = types.StringValue(user.OpMask)
-	data.DefaultPlacement = types.StringValue(user.DefaultPlacement)
-	data.DefaultStorageClass = types.StringValue(user.DefaultStorageClass)
-	data.Type = types.StringValue(user.Type)
+	populateUserResourceModel(&data, user)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -321,16 +312,7 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	// Update state
-	data.UserID = types.StringValue(user.ID)
-	data.DisplayName = types.StringValue(user.DisplayName)
-	data.Email = types.StringValue(user.Email)
-	data.Tenant = types.StringValue(user.Tenant)
-	data.MaxBuckets = types.Int64Value(int64(*user.MaxBuckets))
-	data.Suspended = types.BoolValue(*user.Suspended != 0)
-	data.OpMask = types.StringValue(user.OpMask)
-	data.DefaultPlacement = types.StringValue(user.DefaultPlacement)
-	data.DefaultStorageClass = types.StringValue(user.DefaultStorageClass)
-	data.Type = types.StringValue(user.Type)
+	populateUserResourceModel(&data, user)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -389,14 +371,41 @@ func (r *UserResource) ImportState(ctx context.Context, req resource.ImportState
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("user_id"), userID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tenant"), tenant)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), buildFullUserID(userID, tenant))...)
 }
 
-// buildFullUserID constructs the full user ID for API calls.
-// For tenant users, the format is "tenant$user_id".
-// For non-tenant users, it's just "user_id".
-func buildFullUserID(userID, tenant string) string {
-	if tenant != "" {
-		return tenant + "$" + userID
+func populateUserResourceModel(data *UserResourceModel, user admin.User) {
+	tenant := user.Tenant
+	if tenant == "" && !data.Tenant.IsNull() && !data.Tenant.IsUnknown() {
+		tenant = data.Tenant.ValueString()
 	}
-	return userID
+	if tenant == "" {
+		if parsedTenant, _, ok := splitTenantQualifiedUserID(user.ID); ok {
+			tenant = parsedTenant
+		}
+	}
+
+	userID := data.UserID.ValueString()
+	if userID == "" {
+		if _, localUserID, ok := splitTenantQualifiedUserID(user.ID); ok {
+			userID = localUserID
+		} else {
+			userID = user.ID
+		}
+	}
+	if parsedTenant, localUserID, ok := splitTenantQualifiedUserID(userID); ok && tenant == parsedTenant {
+		userID = localUserID
+	}
+
+	data.ID = types.StringValue(buildFullUserID(userID, tenant))
+	data.UserID = types.StringValue(userID)
+	data.DisplayName = types.StringValue(user.DisplayName)
+	data.Email = types.StringValue(user.Email)
+	data.Tenant = types.StringValue(tenant)
+	data.MaxBuckets = types.Int64Value(int64(*user.MaxBuckets))
+	data.Suspended = types.BoolValue(*user.Suspended != 0)
+	data.OpMask = types.StringValue(user.OpMask)
+	data.DefaultPlacement = types.StringValue(user.DefaultPlacement)
+	data.DefaultStorageClass = types.StringValue(user.DefaultStorageClass)
+	data.Type = types.StringValue(user.Type)
 }

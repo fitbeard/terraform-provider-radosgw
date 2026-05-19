@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/ceph/go-ceph/rgw/admin"
@@ -57,6 +58,31 @@ func TestAccRadosgwIAMQuota_bucketType(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckRadosgwIAMQuotaExists("radosgw_iam_quota.test"),
 					resource.TestCheckResourceAttr("radosgw_iam_quota.test", "type", "bucket"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccRadosgwIAMQuota_withTenantUserReference(t *testing.T) {
+	t.Parallel()
+
+	userID := randomName("tfaccuser")
+	tenant := strings.ReplaceAll(randomName("tfacctenant"), "-", "")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRadosgwIAMUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccRadosgwIAMQuotaConfig_withTenant(userID, tenant),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckRadosgwIAMQuotaExists("radosgw_iam_quota.test"),
+					resource.TestCheckResourceAttr("radosgw_iam_user.test", "user_id", userID),
+					resource.TestCheckResourceAttr("radosgw_iam_user.test", "id", tenant+"$"+userID),
+					resource.TestCheckResourceAttr("radosgw_iam_quota.test", "user_id", userID),
+					resource.TestCheckResourceAttr("radosgw_iam_quota.test", "type", "user"),
 				),
 			},
 		},
@@ -134,13 +160,18 @@ func testAccCheckRadosgwIAMQuotaExists(resourceName string) resource.TestCheckFu
 			return fmt.Errorf("user_id not set")
 		}
 
-		user, err := testAccAdminClient.GetUser(testCtx, admin.User{ID: userID})
+		resolvedUserID, err := resolveUserID(testCtx, &RadosgwClient{Admin: testAccAdminClient}, userID)
 		if err != nil {
-			return fmt.Errorf("error fetching user %s: %s", userID, err)
+			return fmt.Errorf("error resolving user %s: %s", userID, err)
+		}
+
+		user, err := testAccAdminClient.GetUser(testCtx, admin.User{ID: resolvedUserID})
+		if err != nil {
+			return fmt.Errorf("error fetching user %s: %s", resolvedUserID, err)
 		}
 
 		if user.UserQuota.MaxSize == nil {
-			return fmt.Errorf("user quota not set for user %s", userID)
+			return fmt.Errorf("user quota not set for user %s", resolvedUserID)
 		}
 
 		return nil
@@ -181,6 +212,24 @@ resource "radosgw_iam_quota" "test" {
   max_objects = 500
 }
 `, userID)
+}
+
+func testAccRadosgwIAMQuotaConfig_withTenant(userID, tenant string) string {
+	return providerConfig() + fmt.Sprintf(`
+resource "radosgw_iam_user" "test" {
+  user_id      = %q
+  tenant       = %q
+  display_name = "Tenant User for Quota"
+}
+
+resource "radosgw_iam_quota" "test" {
+  user_id     = radosgw_iam_user.test.user_id
+  type        = "user"
+  enabled     = true
+  max_size    = 1073741824
+  max_objects = 1000
+}
+`, userID, tenant)
 }
 
 func testAccRadosgwIAMQuotaConfig_full(userID, quotaType string, enabled bool, maxSize, maxObjects int64) string {

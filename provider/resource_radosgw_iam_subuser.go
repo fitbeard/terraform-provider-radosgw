@@ -149,13 +149,23 @@ func (r *SubuserResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	fullSubuserID := data.UserID.ValueString() + ":" + data.Subuser.ValueString()
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve parent user %s for subuser creation: %s", userID, err.Error()),
+		)
+		return
+	}
+	fullSubuserID := resolvedUserID + ":" + data.Subuser.ValueString()
 
 	tflog.Debug(ctx, "Creating subuser", map[string]any{
-		"user_id": data.UserID.ValueString(),
-		"subuser": data.Subuser.ValueString(),
-		"full_id": fullSubuserID,
-		"access":  data.Access.ValueString(),
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
+		"subuser":          data.Subuser.ValueString(),
+		"full_id":          fullSubuserID,
+		"access":           data.Access.ValueString(),
 	})
 
 	// Create subuser
@@ -170,8 +180,8 @@ func (r *SubuserResource) Create(ctx context.Context, req resource.CreateRequest
 		"subuser_spec": fmt.Sprintf("%+v", subuser),
 	})
 
-	err := retryOnConcurrentModification(ctx, fmt.Sprintf("CreateSubuser %s", fullSubuserID), func() error {
-		return r.client.Admin.CreateSubuser(ctx, admin.User{ID: data.UserID.ValueString()}, subuser)
+	err = retryOnConcurrentModification(ctx, fmt.Sprintf("CreateSubuser %s", fullSubuserID), func() error {
+		return r.client.Admin.CreateSubuser(ctx, admin.User{ID: resolvedUserID}, subuser)
 	})
 
 	if err != nil {
@@ -187,11 +197,11 @@ func (r *SubuserResource) Create(ctx context.Context, req resource.CreateRequest
 	// For production deployments with key rotation requirements, users should manage keys explicitly
 	// using the separate radosgw_iam_access_key resource. This gives users both simplicity (auto-key) and
 	// control (explicit key management) following Terraform best practices (similar to AWS IAM user vs access key).
-	user, err := r.client.Admin.GetUser(ctx, admin.User{ID: data.UserID.ValueString()})
+	user, err := r.client.Admin.GetUser(ctx, admin.User{ID: resolvedUserID})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading User After Subuser Creation",
-			fmt.Sprintf("Could not read user %s to retrieve secret key: %s", data.UserID.ValueString(), err.Error()),
+			fmt.Sprintf("Could not read user %s to retrieve secret key: %s", userID, err.Error()),
 		)
 		return
 	}
@@ -225,15 +235,30 @@ func (r *SubuserResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	fullSubuserID := data.UserID.ValueString() + ":" + data.Subuser.ValueString()
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		// If user doesn't exist, remove subuser from state
+		if errors.Is(err, admin.ErrNoSuchUser) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve parent user %s for subuser read: %s", userID, err.Error()),
+		)
+		return
+	}
+	fullSubuserID := resolvedUserID + ":" + data.Subuser.ValueString()
 
 	tflog.Debug(ctx, "Reading subuser", map[string]any{
-		"user_id": data.UserID.ValueString(),
-		"full_id": fullSubuserID,
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
+		"full_id":          fullSubuserID,
 	})
 
 	// Get the parent user to check subusers
-	user, err := r.client.Admin.GetUser(ctx, admin.User{ID: data.UserID.ValueString()})
+	user, err := r.client.Admin.GetUser(ctx, admin.User{ID: resolvedUserID})
 	if err != nil {
 		// If user doesn't exist, remove subuser from state
 		if errors.Is(err, admin.ErrNoSuchUser) {
@@ -242,7 +267,7 @@ func (r *SubuserResource) Read(ctx context.Context, req resource.ReadRequest, re
 		}
 		resp.Diagnostics.AddError(
 			"Error Reading User",
-			fmt.Sprintf("Could not read user %s: %s", data.UserID.ValueString(), err.Error()),
+			fmt.Sprintf("Could not read user %s: %s", userID, err.Error()),
 		)
 		return
 	}
@@ -298,12 +323,22 @@ func (r *SubuserResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	fullSubuserID := data.UserID.ValueString() + ":" + data.Subuser.ValueString()
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve parent user %s for subuser update: %s", userID, err.Error()),
+		)
+		return
+	}
+	fullSubuserID := resolvedUserID + ":" + data.Subuser.ValueString()
 
 	tflog.Debug(ctx, "Updating subuser", map[string]any{
-		"user_id": data.UserID.ValueString(),
-		"full_id": fullSubuserID,
-		"access":  data.Access.ValueString(),
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
+		"full_id":          fullSubuserID,
+		"access":           data.Access.ValueString(),
 	})
 
 	// Modify subuser (only access can be updated)
@@ -312,8 +347,8 @@ func (r *SubuserResource) Update(ctx context.Context, req resource.UpdateRequest
 		Access: admin.SubuserAccess(accessToAPI(data.Access.ValueString())),
 	}
 
-	err := retryOnConcurrentModification(ctx, fmt.Sprintf("ModifySubuser %s", fullSubuserID), func() error {
-		return r.client.Admin.ModifySubuser(ctx, admin.User{ID: data.UserID.ValueString()}, subuser)
+	err = retryOnConcurrentModification(ctx, fmt.Sprintf("ModifySubuser %s", fullSubuserID), func() error {
+		return r.client.Admin.ModifySubuser(ctx, admin.User{ID: resolvedUserID}, subuser)
 	})
 
 	if err != nil {
@@ -324,9 +359,8 @@ func (r *SubuserResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	// Preserve computed fields from state since they don't change during update
-	// (user_id and subuser are RequiresReplace, so id and secret_key remain the same)
-	data.FullID = state.FullID
+	// Preserve the key while refreshing the computed full ID from the resolved user.
+	data.FullID = types.StringValue(fullSubuserID)
 	data.SecretKey = state.SecretKey
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -341,11 +375,24 @@ func (r *SubuserResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	fullSubuserID := data.UserID.ValueString() + ":" + data.Subuser.ValueString()
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		if errors.Is(err, admin.ErrNoSuchUser) {
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve parent user %s for subuser deletion: %s", userID, err.Error()),
+		)
+		return
+	}
+	fullSubuserID := resolvedUserID + ":" + data.Subuser.ValueString()
 
 	tflog.Debug(ctx, "Deleting subuser", map[string]any{
-		"user_id": data.UserID.ValueString(),
-		"full_id": fullSubuserID,
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
+		"full_id":          fullSubuserID,
 	})
 
 	purgeKeys := true
@@ -354,8 +401,8 @@ func (r *SubuserResource) Delete(ctx context.Context, req resource.DeleteRequest
 		PurgeKeys: &purgeKeys, // Purge associated keys
 	}
 
-	err := retryOnConcurrentModification(ctx, fmt.Sprintf("RemoveSubuser %s", fullSubuserID), func() error {
-		return r.client.Admin.RemoveSubuser(ctx, admin.User{ID: data.UserID.ValueString()}, subuser)
+	err = retryOnConcurrentModification(ctx, fmt.Sprintf("RemoveSubuser %s", fullSubuserID), func() error {
+		return r.client.Admin.RemoveSubuser(ctx, admin.User{ID: resolvedUserID}, subuser)
 	})
 
 	if err != nil {

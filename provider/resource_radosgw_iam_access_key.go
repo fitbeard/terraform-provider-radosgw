@@ -181,7 +181,17 @@ func (r *KeyResource) Create(ctx context.Context, req resource.CreateRequest, re
 }
 
 func (r *KeyResource) createS3Key(ctx context.Context, data *KeyResourceModel, resp *resource.CreateResponse) {
-	userMutex := getKeyMutex(data.UserID.ValueString())
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for S3 key creation: %s", userID, err.Error()),
+		)
+		return
+	}
+
+	userMutex := getKeyMutex(resolvedUserID)
 	userMutex.Lock()
 	defer userMutex.Unlock()
 
@@ -189,7 +199,7 @@ func (r *KeyResource) createS3Key(ctx context.Context, data *KeyResourceModel, r
 	var existingAccessKeys map[string]bool
 	if data.AccessKey.IsNull() || data.AccessKey.ValueString() == "" {
 		existingAccessKeys = make(map[string]bool)
-		user, err := r.client.Admin.GetUser(ctx, admin.User{ID: data.UserID.ValueString()})
+		user, err := r.client.Admin.GetUser(ctx, admin.User{ID: resolvedUserID})
 		if err == nil {
 			for _, key := range user.Keys {
 				existingAccessKeys[key.AccessKey] = true
@@ -199,7 +209,7 @@ func (r *KeyResource) createS3Key(ctx context.Context, data *KeyResourceModel, r
 
 	generateKey := true
 	keySpec := admin.UserKeySpec{
-		UID:         data.UserID.ValueString(),
+		UID:         resolvedUserID,
 		KeyType:     "s3",
 		GenerateKey: &generateKey,
 	}
@@ -212,7 +222,7 @@ func (r *KeyResource) createS3Key(ctx context.Context, data *KeyResourceModel, r
 	}
 
 	var keys *[]admin.UserKeySpec
-	err := retryOnConcurrentModification(ctx, fmt.Sprintf("CreateKey %s", data.UserID.ValueString()), func() error {
+	err = retryOnConcurrentModification(ctx, fmt.Sprintf("CreateKey %s", resolvedUserID), func() error {
 		var createErr error
 		keys, createErr = r.client.Admin.CreateKey(ctx, keySpec)
 		return createErr
@@ -221,7 +231,7 @@ func (r *KeyResource) createS3Key(ctx context.Context, data *KeyResourceModel, r
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating S3 Key",
-			fmt.Sprintf("Could not create key for user %s: %s", data.UserID.ValueString(), err.Error()),
+			fmt.Sprintf("Could not create key for user %s: %s", userID, err.Error()),
 		)
 		return
 	}
@@ -246,7 +256,7 @@ func (r *KeyResource) createS3Key(ctx context.Context, data *KeyResourceModel, r
 	} else {
 		for i := range *keys {
 			key := &(*keys)[i]
-			if key.User == data.UserID.ValueString() && !existingAccessKeys[key.AccessKey] {
+			if (key.User == resolvedUserID || key.User == userID || key.User == "") && !existingAccessKeys[key.AccessKey] {
 				createdKey = key
 				break
 			}
@@ -273,17 +283,27 @@ func (r *KeyResource) createS3Key(ctx context.Context, data *KeyResourceModel, r
 }
 
 func (r *KeyResource) createSwiftKey(ctx context.Context, data *KeyResourceModel, resp *resource.CreateResponse) {
-	fullSubuserID := fmt.Sprintf("%s:%s", data.UserID.ValueString(), data.SubUser.ValueString())
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for Swift key creation: %s", userID, err.Error()),
+		)
+		return
+	}
+	fullSubuserID := fmt.Sprintf("%s:%s", resolvedUserID, data.SubUser.ValueString())
 
 	tflog.Debug(ctx, "Creating Swift key", map[string]any{
-		"user_id": data.UserID.ValueString(),
-		"subuser": data.SubUser.ValueString(),
-		"full_id": fullSubuserID,
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
+		"subuser":          data.SubUser.ValueString(),
+		"full_id":          fullSubuserID,
 	})
 
 	generateKey := true
 	keySpec := admin.UserKeySpec{
-		UID:         data.UserID.ValueString(),
+		UID:         resolvedUserID,
 		SubUser:     data.SubUser.ValueString(),
 		KeyType:     "swift",
 		GenerateKey: &generateKey,
@@ -294,7 +314,7 @@ func (r *KeyResource) createSwiftKey(ctx context.Context, data *KeyResourceModel
 	}
 
 	var keys *[]admin.UserKeySpec
-	err := retryOnConcurrentModification(ctx, fmt.Sprintf("CreateKey %s", fullSubuserID), func() error {
+	err = retryOnConcurrentModification(ctx, fmt.Sprintf("CreateKey %s", fullSubuserID), func() error {
 		var createErr error
 		keys, createErr = r.client.Admin.CreateKey(ctx, keySpec)
 		return createErr
@@ -351,13 +371,27 @@ func (r *KeyResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	}
 
 	keyType := data.KeyType.ValueString()
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		if errors.Is(err, admin.ErrNoSuchUser) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for key read: %s", userID, err.Error()),
+		)
+		return
+	}
 
 	tflog.Debug(ctx, "Reading RadosGW key", map[string]any{
-		"user_id":  data.UserID.ValueString(),
-		"key_type": keyType,
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
+		"key_type":         keyType,
 	})
 
-	user, err := r.client.Admin.GetUser(ctx, admin.User{ID: data.UserID.ValueString()})
+	user, err := r.client.Admin.GetUser(ctx, admin.User{ID: resolvedUserID})
 	if err != nil {
 		if errors.Is(err, admin.ErrNoSuchUser) {
 			resp.State.RemoveResource(ctx)
@@ -365,13 +399,13 @@ func (r *KeyResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		}
 		resp.Diagnostics.AddError(
 			"Error Reading Key",
-			fmt.Sprintf("Could not read user %s: %s", data.UserID.ValueString(), err.Error()),
+			fmt.Sprintf("Could not read user %s: %s", userID, err.Error()),
 		)
 		return
 	}
 
 	if keyType == "swift" {
-		fullSubuserID := fmt.Sprintf("%s:%s", data.UserID.ValueString(), data.SubUser.ValueString())
+		fullSubuserID := fmt.Sprintf("%s:%s", resolvedUserID, data.SubUser.ValueString())
 		found := false
 		for i := range user.SwiftKeys {
 			swiftKey := &user.SwiftKeys[i]
@@ -383,7 +417,7 @@ func (r *KeyResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 
 		if !found {
 			tflog.Debug(ctx, "Swift key not found, removing from state", map[string]any{
-				"user_id": data.UserID.ValueString(),
+				"user_id": userID,
 				"full_id": fullSubuserID,
 			})
 			resp.State.RemoveResource(ctx)
@@ -401,7 +435,7 @@ func (r *KeyResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 
 		if !found {
 			tflog.Debug(ctx, "S3 key not found, removing from state", map[string]any{
-				"user_id":    data.UserID.ValueString(),
+				"user_id":    userID,
 				"access_key": data.AccessKey.ValueString(),
 			})
 			resp.State.RemoveResource(ctx)
@@ -430,9 +464,19 @@ func (r *KeyResource) Update(ctx context.Context, req resource.UpdateRequest, re
 			"key_type": keyType,
 		})
 
+		userID := state.UserID.ValueString()
+		resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error Resolving User",
+				fmt.Sprintf("Could not resolve user %s for key update: %s", userID, err.Error()),
+			)
+			return
+		}
+
 		generateKey := false
 		keySpec := admin.UserKeySpec{
-			UID:         state.UserID.ValueString(),
+			UID:         resolvedUserID,
 			KeyType:     keyType,
 			SecretKey:   plan.SecretKey.ValueString(),
 			GenerateKey: &generateKey,
@@ -444,7 +488,7 @@ func (r *KeyResource) Update(ctx context.Context, req resource.UpdateRequest, re
 			keySpec.AccessKey = state.AccessKey.ValueString()
 		}
 
-		err := retryOnConcurrentModification(ctx, fmt.Sprintf("UpdateKey %s", state.ID.ValueString()), func() error {
+		err = retryOnConcurrentModification(ctx, fmt.Sprintf("UpdateKey %s", state.ID.ValueString()), func() error {
 			_, createErr := r.client.Admin.CreateKey(ctx, keySpec)
 			return createErr
 		})
@@ -477,14 +521,27 @@ func (r *KeyResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 	}
 
 	keyType := data.KeyType.ValueString()
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		if errors.Is(err, admin.ErrNoSuchUser) {
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for key deletion: %s", userID, err.Error()),
+		)
+		return
+	}
 
 	tflog.Debug(ctx, "Deleting RadosGW key", map[string]any{
-		"user_id":  data.UserID.ValueString(),
-		"key_type": keyType,
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
+		"key_type":         keyType,
 	})
 
 	keySpec := admin.UserKeySpec{
-		UID:     data.UserID.ValueString(),
+		UID:     resolvedUserID,
 		KeyType: keyType,
 	}
 
@@ -494,7 +551,7 @@ func (r *KeyResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 		keySpec.AccessKey = data.AccessKey.ValueString()
 	}
 
-	err := retryOnConcurrentModification(ctx, fmt.Sprintf("RemoveKey %s", data.ID.ValueString()), func() error {
+	err = retryOnConcurrentModification(ctx, fmt.Sprintf("RemoveKey %s", data.ID.ValueString()), func() error {
 		return r.client.Admin.RemoveKey(ctx, keySpec)
 	})
 

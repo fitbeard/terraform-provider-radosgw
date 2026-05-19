@@ -11,7 +11,7 @@
       "version": "2.32.28"
     },
     "ghcr.io/devcontainers/features/go:1": {
-      "version": "1.25.5",
+      "version": "1.25.8",
       "golangciLintVersion": "2.8.0"
     },
     "ghcr.io/devcontainers-extra/features/opentofu:1": {

@@ -48,7 +48,7 @@ The following arguments are supported:
 
 
 * `display_name` - (Required) The display name of the user.
-* `user_id` - (Required) The user ID.
+* `user_id` - (Required) The local user ID. For tenant users, this remains the user name without the tenant prefix; use `id` when another resource needs the tenant-qualified RGW user ID.
 
 
 * `default_placement` - (Optional) The default placement for the user's buckets. Note: Once set, this field cannot be cleared, only changed to a different value.
@@ -66,6 +66,7 @@ The following arguments are supported:
 The following attributes are exported:
 
 * `default_storage_class` - The default storage class for the user's objects.
+* `id` - The tenant-qualified RGW user ID. For tenant users this is `tenant$user_id`; for non-tenant users this matches `user_id`.
 * `type` - The user type (e.g., 'rgw', 'ldap').
 * `display_name` - See Argument Reference above.
 * `user_id` - See Argument Reference above.
@@ -84,5 +85,5 @@ Import is supported using the following syntax:
 terraform import radosgw_iam_user.example example-user
 
 # Import a user with tenant
-terraform import radosgw_iam_user.custom my-tenant$custom-user
+terraform import radosgw_iam_user.custom 'my-tenant$custom-user'
 ```

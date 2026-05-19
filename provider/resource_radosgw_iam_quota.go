@@ -67,7 +67,7 @@ Upon deletion, the quota is disabled (not removed, as quotas are properties of u
 
 		Attributes: map[string]schema.Attribute{
 			"user_id": schema.StringAttribute{
-				MarkdownDescription: "The user ID to configure quotas for.",
+				MarkdownDescription: "The user ID to configure quotas for. Plain user IDs, tenant-qualified IDs (`tenant$user_id`), and `radosgw_iam_user.user_id` references are supported. A plain ID is used directly when a non-tenant user with that ID exists. If no direct user exists, a local tenant user ID is resolved only when it uniquely matches one tenant user. When both a global user and tenant user share the same local ID, or multiple tenants share that local ID, use `radosgw_iam_user.id` or the tenant-qualified `tenant$user_id` form.",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -135,10 +135,20 @@ func (r *QuotaResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for quota: %s", userID, err.Error()),
+		)
+		return
+	}
+
 	// Build quota spec for the user
 	enabled := data.Enabled.ValueBool()
 	quota := admin.QuotaSpec{
-		UID:       data.UserID.ValueString(),
+		UID:       resolvedUserID,
 		QuotaType: data.Type.ValueString(),
 		Enabled:   &enabled,
 	}
@@ -166,7 +176,7 @@ func (r *QuotaResource) Create(ctx context.Context, req resource.CreateRequest, 
 	// Set user-level quota based on type with retry logic for ConcurrentModification
 	// "user" type: Sets total quota for the user across all their buckets
 	// "bucket" type: Sets per-bucket quota for all buckets owned by this user
-	err := retryOnConcurrentModification(ctx, fmt.Sprintf("SetQuota %s/%s", data.Type.ValueString(), data.UserID.ValueString()), func() error {
+	err = retryOnConcurrentModification(ctx, fmt.Sprintf("SetQuota %s/%s", data.Type.ValueString(), resolvedUserID), func() error {
 		if data.Type.ValueString() == "user" {
 			return r.client.Admin.SetUserQuota(ctx, quota)
 		}
@@ -176,7 +186,7 @@ func (r *QuotaResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating User Quota",
-			fmt.Sprintf("Could not create %s quota for user %s: %s", data.Type.ValueString(), data.UserID.ValueString(), err.Error()),
+			fmt.Sprintf("Could not create %s quota for user %s: %s", data.Type.ValueString(), userID, err.Error()),
 		)
 		return
 	}
@@ -193,13 +203,26 @@ func (r *QuotaResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		if errors.Is(err, admin.ErrNoSuchUser) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for quota: %s", userID, err.Error()),
+		)
+		return
+	}
+
 	// Prepare request to get user's quota
 	reqQuotaSpec := admin.QuotaSpec{
-		UID: data.UserID.ValueString(),
+		UID: resolvedUserID,
 	}
 
 	// Get user-level quota based on type
-	var err error
 	var quotaSpec admin.QuotaSpec
 	if data.Type.ValueString() == "user" {
 		quotaSpec, err = r.client.Admin.GetUserQuota(ctx, reqQuotaSpec)
@@ -214,7 +237,7 @@ func (r *QuotaResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		}
 		resp.Diagnostics.AddError(
 			"Error Reading User Quota",
-			fmt.Sprintf("Could not read %s quota for user %s: %s", data.Type.ValueString(), data.UserID.ValueString(), err.Error()),
+			fmt.Sprintf("Could not read %s quota for user %s: %s", data.Type.ValueString(), userID, err.Error()),
 		)
 		return
 	}
@@ -249,10 +272,20 @@ func (r *QuotaResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for quota: %s", userID, err.Error()),
+		)
+		return
+	}
+
 	// Build quota spec for the user
 	enabled := data.Enabled.ValueBool()
 	quota := admin.QuotaSpec{
-		UID:       data.UserID.ValueString(),
+		UID:       resolvedUserID,
 		QuotaType: data.Type.ValueString(),
 		Enabled:   &enabled,
 	}
@@ -276,7 +309,7 @@ func (r *QuotaResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 
 	// Update user-level quota based on type with retry logic for ConcurrentModification
-	err := retryOnConcurrentModification(ctx, fmt.Sprintf("UpdateQuota %s/%s", data.Type.ValueString(), data.UserID.ValueString()), func() error {
+	err = retryOnConcurrentModification(ctx, fmt.Sprintf("UpdateQuota %s/%s", data.Type.ValueString(), resolvedUserID), func() error {
 		if data.Type.ValueString() == "user" {
 			return r.client.Admin.SetUserQuota(ctx, quota)
 		}
@@ -286,7 +319,7 @@ func (r *QuotaResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating User Quota",
-			fmt.Sprintf("Could not update %s quota for user %s: %s", data.Type.ValueString(), data.UserID.ValueString(), err.Error()),
+			fmt.Sprintf("Could not update %s quota for user %s: %s", data.Type.ValueString(), userID, err.Error()),
 		)
 		return
 	}
@@ -303,6 +336,19 @@ func (r *QuotaResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 
+	userID := data.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, r.client, userID)
+	if err != nil {
+		if errors.Is(err, admin.ErrNoSuchUser) {
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for quota deletion: %s", userID, err.Error()),
+		)
+		return
+	}
+
 	// Disable quota on delete (quotas cannot be removed, only disabled)
 	// This resets the user's quota to unlimited and disabled state
 	enabled := false
@@ -310,7 +356,7 @@ func (r *QuotaResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	maxObjects := int64(-1)
 
 	quota := admin.QuotaSpec{
-		UID:        data.UserID.ValueString(),
+		UID:        resolvedUserID,
 		QuotaType:  data.Type.ValueString(),
 		Enabled:    &enabled,
 		MaxSize:    &maxSize,
@@ -318,7 +364,7 @@ func (r *QuotaResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 
 	// Disable user-level quota based on type with retry logic for ConcurrentModification
-	err := retryOnConcurrentModification(ctx, fmt.Sprintf("DeleteQuota %s/%s", data.Type.ValueString(), data.UserID.ValueString()), func() error {
+	err = retryOnConcurrentModification(ctx, fmt.Sprintf("DeleteQuota %s/%s", data.Type.ValueString(), resolvedUserID), func() error {
 		if data.Type.ValueString() == "user" {
 			return r.client.Admin.SetUserQuota(ctx, quota)
 		}
@@ -328,7 +374,7 @@ func (r *QuotaResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	if err != nil && !errors.Is(err, admin.ErrNoSuchUser) {
 		resp.Diagnostics.AddError(
 			"Error Deleting User Quota",
-			fmt.Sprintf("Could not disable %s quota for user %s: %s", data.Type.ValueString(), data.UserID.ValueString(), err.Error()),
+			fmt.Sprintf("Could not disable %s quota for user %s: %s", data.Type.ValueString(), userID, err.Error()),
 		)
 		return
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/ceph/go-ceph/rgw/admin"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -110,13 +111,29 @@ func (d *SubusersDataSource) Read(ctx context.Context, req datasource.ReadReques
 	}
 
 	userID := config.UserID.ValueString()
+	resolvedUserID, err := resolveUserID(ctx, d.client, userID)
+	if err != nil {
+		if errors.Is(err, admin.ErrNoSuchUser) {
+			resp.Diagnostics.AddError(
+				"User Not Found",
+				fmt.Sprintf("User %q does not exist.", userID),
+			)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %q for subuser lookup: %s", userID, err.Error()),
+		)
+		return
+	}
 
 	tflog.Debug(ctx, "Reading RadosGW subusers", map[string]any{
-		"user_id": userID,
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
 	})
 
 	// Get user to retrieve subusers
-	user, err := d.client.Admin.GetUser(ctx, admin.User{ID: userID})
+	user, err := d.client.Admin.GetUser(ctx, admin.User{ID: resolvedUserID})
 	if err != nil {
 		if errors.Is(err, admin.ErrNoSuchUser) {
 			resp.Diagnostics.AddError(
@@ -142,8 +159,8 @@ func (d *SubusersDataSource) Read(ctx context.Context, req datasource.ReadReques
 	for _, subuser := range user.Subusers {
 		// Extract just the subuser name from the full ID (user_id:subuser_name)
 		name := subuser.Name
-		if idx := len(userID) + 1; len(name) > idx {
-			name = subuser.Name[idx:]
+		if prefix := resolvedUserID + ":"; strings.HasPrefix(name, prefix) {
+			name = strings.TrimPrefix(name, prefix)
 		}
 
 		subusers = append(subusers, SubuserModel{

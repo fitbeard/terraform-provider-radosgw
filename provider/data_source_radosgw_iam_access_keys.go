@@ -122,14 +122,30 @@ func (d *AccessKeysDataSource) Read(ctx context.Context, req datasource.ReadRequ
 
 	userID := config.UserID.ValueString()
 	keyTypeFilter := config.KeyType.ValueString() // Empty string if not set
+	resolvedUserID, err := resolveUserID(ctx, d.client, userID)
+	if err != nil {
+		if errors.Is(err, admin.ErrNoSuchUser) {
+			resp.Diagnostics.AddError(
+				"User Not Found",
+				fmt.Sprintf("User %q does not exist.", userID),
+			)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %q for access key lookup: %s", userID, err.Error()),
+		)
+		return
+	}
 
 	tflog.Debug(ctx, "Reading RadosGW access keys", map[string]any{
-		"user_id":  userID,
-		"key_type": keyTypeFilter,
+		"user_id":          userID,
+		"resolved_user_id": resolvedUserID,
+		"key_type":         keyTypeFilter,
 	})
 
 	// Get user to retrieve keys
-	user, err := d.client.Admin.GetUser(ctx, admin.User{ID: userID})
+	user, err := d.client.Admin.GetUser(ctx, admin.User{ID: resolvedUserID})
 	if err != nil {
 		if errors.Is(err, admin.ErrNoSuchUser) {
 			resp.Diagnostics.AddError(
