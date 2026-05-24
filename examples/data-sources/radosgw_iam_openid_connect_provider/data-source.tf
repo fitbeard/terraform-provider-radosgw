@@ -10,7 +10,7 @@ data "radosgw_iam_openid_connect_provider" "by_url" {
 
 # Lookup OIDC provider by URL (with https:// protocol)
 data "radosgw_iam_openid_connect_provider" "by_url_https" {
-  url = "https://keycloak.example.com/auth/realms/myrealm"
+  url = "https://keycloak.example.com/realms/myrealm"
 }
 
 # Use data source to reference an existing OIDC provider in a trust policy

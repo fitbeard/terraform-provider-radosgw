@@ -11,6 +11,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -44,6 +45,7 @@ type RoleResourceModel struct {
 	Description        types.String `tfsdk:"description"`
 	AssumeRolePolicy   types.String `tfsdk:"assume_role_policy"`
 	MaxSessionDuration types.Int64  `tfsdk:"max_session_duration"`
+	Tags               types.Map    `tfsdk:"tags"`
 	ARN                types.String `tfsdk:"arn"`
 	CreateDate         types.String `tfsdk:"create_date"`
 	UniqueID           types.String `tfsdk:"unique_id"`
@@ -77,6 +79,28 @@ type roleXML struct {
 	MaxSessionDuration       int64  `xml:"MaxSessionDuration"`
 	AssumeRolePolicyDocument string `xml:"AssumeRolePolicyDocument"`
 	Description              string `xml:"Description"`
+}
+
+type tagXML struct {
+	Key   string `xml:"Key"`
+	Value string `xml:"Value"`
+}
+
+type listRoleTagsResponseXML struct {
+	XMLName xml.Name           `xml:"ListRoleTagsResponse"`
+	Result  listRoleTagsResult `xml:"ListRoleTagsResult"`
+}
+
+type listRoleTagsResult struct {
+	Tags        roleTagsXML `xml:"Tags"`
+	IsTruncated bool        `xml:"IsTruncated"`
+	Marker      string      `xml:"Marker"`
+}
+
+type roleTagsXML struct {
+	Members []tagXML `xml:"member"`
+	Keys    []string `xml:"Key>Key"`
+	Values  []string `xml:"Value>Value"`
 }
 
 func (r *RoleResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -143,6 +167,11 @@ func (r *RoleResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Validators: []validator.Int64{
 					int64validator.Between(3600, 43200),
 				},
+			},
+			"tags": schema.MapAttribute{
+				MarkdownDescription: "Map of tags to assign to the role.",
+				Optional:            true,
+				ElementType:         types.StringType,
 			},
 			"arn": schema.StringAttribute{
 				MarkdownDescription: "Amazon Resource Name (ARN) of the role.",
@@ -222,6 +251,12 @@ func (r *RoleResource) Create(ctx context.Context, req resource.CreateRequest, r
 		params.Set("Description", plan.Description.ValueString())
 	}
 
+	tags, diags := terraformMapToStringMap(ctx, plan.Tags)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	body, err := r.iamClient.DoRequest(ctx, params, "iam")
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -253,6 +288,26 @@ func (r *RoleResource) Create(ctx context.Context, req resource.CreateRequest, r
 	// Store the normalized policy to avoid perpetual diffs
 	plan.AssumeRolePolicy = types.StringValue(normalizedPolicy)
 
+	if len(tags) > 0 {
+		if err := r.tagRole(ctx, plan.Name.ValueString(), tags); err != nil {
+			deleteParams := url.Values{}
+			deleteParams.Set("Action", "DeleteRole")
+			deleteParams.Set("RoleName", plan.Name.ValueString())
+			_, deleteErr := r.iamClient.DoRequest(ctx, deleteParams, "iam")
+			if deleteErr != nil {
+				resp.Diagnostics.AddWarning(
+					"Error Cleaning Up Role",
+					fmt.Sprintf("Could not delete role %s after tag creation failed: %s", plan.Name.ValueString(), deleteErr.Error()),
+				)
+			}
+			resp.Diagnostics.AddError(
+				"Error Tagging Role",
+				fmt.Sprintf("Could not tag role %s: %s", plan.Name.ValueString(), err.Error()),
+			)
+			return
+		}
+	}
+
 	tflog.Trace(ctx, "Created role", map[string]any{
 		"name": plan.Name.ValueString(),
 		"arn":  role.Arn,
@@ -272,6 +327,7 @@ func (r *RoleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	// Preserve the current description from state - older Ceph versions (Reef)
 	// don't return this field in the API response
 	currentDescription := state.Description
+	currentTags := state.Tags
 
 	params := url.Values{}
 	params.Set("Action", "GetRole")
@@ -334,6 +390,21 @@ func (r *RoleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 			state.AssumeRolePolicy = types.StringValue(decodedPolicy)
 		}
 	}
+
+	tags, err := listRoleTags(ctx, r.iamClient, state.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Reading Role Tags",
+			fmt.Sprintf("Could not read tags for role %s: %s", state.Name.ValueString(), err.Error()),
+		)
+		return
+	}
+	tagMap, tagDiags := stringMapToTerraformMap(ctx, tags, currentTags)
+	resp.Diagnostics.Append(tagDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	state.Tags = tagMap
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -411,6 +482,33 @@ func (r *RoleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		})
 	}
 
+	// Update tags if changed
+	if !plan.Tags.Equal(state.Tags) {
+		plannedTags, diags := terraformMapToStringMap(ctx, plan.Tags)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		currentTags, diags := terraformMapToStringMap(ctx, state.Tags)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		if err := r.updateRoleTags(ctx, plan.Name.ValueString(), currentTags, plannedTags); err != nil {
+			resp.Diagnostics.AddError(
+				"Error Updating Role Tags",
+				fmt.Sprintf("Could not update tags for role %s: %s", plan.Name.ValueString(), err.Error()),
+			)
+			return
+		}
+
+		tflog.Debug(ctx, "Updated role tags", map[string]any{
+			"name": plan.Name.ValueString(),
+		})
+	}
+
 	// Preserve computed fields
 	plan.ARN = state.ARN
 	plan.CreateDate = state.CreateDate
@@ -472,4 +570,143 @@ func normalizeJSONPolicy(policy string) (string, error) {
 	}
 
 	return string(normalized), nil
+}
+
+func listRoleTags(ctx context.Context, iamClient *IAMClient, roleName string) (map[string]string, error) {
+	params := url.Values{}
+	params.Set("Action", "ListRoleTags")
+	params.Set("RoleName", roleName)
+
+	tags := make(map[string]string)
+	for {
+		body, err := iamClient.DoRequest(ctx, params, "iam")
+		if err != nil {
+			return nil, err
+		}
+
+		var response listRoleTagsResponseXML
+		if err := xml.Unmarshal(body, &response); err != nil {
+			return nil, fmt.Errorf("could not parse ListRoleTags response: %w", err)
+		}
+
+		for key, value := range response.Result.Tags.toMap() {
+			tags[key] = value
+		}
+
+		if !response.Result.IsTruncated {
+			break
+		}
+		params.Set("Marker", response.Result.Marker)
+	}
+
+	return tags, nil
+}
+
+func (t roleTagsXML) toMap() map[string]string {
+	tags := make(map[string]string)
+
+	for _, tag := range t.Members {
+		key := tag.Key
+		if key == "" {
+			continue
+		}
+		tags[key] = tag.Value
+	}
+
+	for i := 0; i < len(t.Keys) && i < len(t.Values); i++ {
+		key := t.Keys[i]
+		if key == "" {
+			continue
+		}
+		tags[key] = t.Values[i]
+	}
+
+	return tags
+}
+
+func (r *RoleResource) updateRoleTags(ctx context.Context, roleName string, oldTags, newTags map[string]string) error {
+	tagsToAdd := make(map[string]string)
+	var tagKeysToRemove []string
+
+	for key, newValue := range newTags {
+		if oldValue, ok := oldTags[key]; !ok || oldValue != newValue {
+			tagsToAdd[key] = newValue
+		}
+	}
+
+	for key := range oldTags {
+		if _, ok := newTags[key]; !ok {
+			tagKeysToRemove = append(tagKeysToRemove, key)
+		}
+	}
+
+	if len(tagKeysToRemove) > 0 {
+		if err := r.untagRole(ctx, roleName, tagKeysToRemove); err != nil {
+			return err
+		}
+	}
+
+	if len(tagsToAdd) > 0 {
+		if err := r.tagRole(ctx, roleName, tagsToAdd); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *RoleResource) tagRole(ctx context.Context, roleName string, tags map[string]string) error {
+	params := url.Values{}
+	params.Set("Action", "TagRole")
+	params.Set("RoleName", roleName)
+	addTagsToParams(params, tags)
+
+	_, err := r.iamClient.DoRequest(ctx, params, "iam")
+	return err
+}
+
+func (r *RoleResource) untagRole(ctx context.Context, roleName string, tagKeys []string) error {
+	for _, key := range tagKeys {
+		params := url.Values{}
+		params.Set("Action", "UntagRole")
+		params.Set("RoleName", roleName)
+		params.Set("TagKeys.member.1", key)
+		// RadosGW currently collects this exact key in UntagRole rather than
+		// the numbered AWS Query member above.
+		params.Set("TagKeys.member.", key)
+
+		if _, err := r.iamClient.DoRequest(ctx, params, "iam"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func addTagsToParams(params url.Values, tags map[string]string) {
+	i := 1
+	for key, value := range tags {
+		params.Set(fmt.Sprintf("Tags.member.%d.Key", i), key)
+		params.Set(fmt.Sprintf("Tags.member.%d.Value", i), value)
+		i++
+	}
+}
+
+func terraformMapToStringMap(ctx context.Context, value types.Map) (map[string]string, diag.Diagnostics) {
+	if value.IsNull() || value.IsUnknown() {
+		return map[string]string{}, nil
+	}
+
+	tags := make(map[string]string)
+	diags := value.ElementsAs(ctx, &tags, false)
+	return tags, diags
+}
+
+func stringMapToTerraformMap(ctx context.Context, tags map[string]string, prior types.Map) (types.Map, diag.Diagnostics) {
+	if len(tags) == 0 && prior.IsNull() {
+		return types.MapNull(types.StringType), nil
+	}
+
+	value, diags := types.MapValueFrom(ctx, types.StringType, tags)
+	return value, diags
 }

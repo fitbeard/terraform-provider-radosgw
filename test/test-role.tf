@@ -52,6 +52,11 @@ resource "radosgw_iam_role" "test_role" {
   description          = "Test role using policy document data source"
   assume_role_policy   = data.radosgw_iam_policy_document.trust_policy.json
   max_session_duration = 10800 # 3 hours
+
+  tags = {
+    Environment = "test"
+    ManagedBy   = "terraform"
+  }
 }
 
 # Inline policy using policy document data source
@@ -128,6 +133,10 @@ output "test_role_arn" {
 
 output "test_role_inline_arn" {
   value = radosgw_iam_role.test_role_inline.arn
+}
+
+output "test_role_tags" {
+  value = radosgw_iam_role.test_role.tags
 }
 
 output "trust_policy_json" {

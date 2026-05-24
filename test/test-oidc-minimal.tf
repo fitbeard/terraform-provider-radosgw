@@ -8,7 +8,7 @@
 
 # Keycloak OIDC Provider - multiple clients and thumbprints
 resource "radosgw_iam_openid_connect_provider" "test_keycloak" {
-  url = "https://localhost:8080/auth/realms/quickstart"
+  url = "https://localhost:8080/realms/quickstart"
 
   # Multiple client IDs
   client_id_list = [

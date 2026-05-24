@@ -28,7 +28,7 @@ data "radosgw_iam_openid_connect_provider" "by_url" {
 # Lookup by URL (with https:// prefix - both formats supported)
 # -----------------------------------------------------------------------------
 data "radosgw_iam_openid_connect_provider" "by_url_https" {
-  url = "https://localhost:8080/auth/realms/quickstart"
+  url = "https://localhost:8080/realms/quickstart"
 
   depends_on = [radosgw_iam_openid_connect_provider.test_keycloak]
 }
