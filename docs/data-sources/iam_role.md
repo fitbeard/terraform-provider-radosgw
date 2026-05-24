@@ -60,5 +60,6 @@ The following attributes are exported:
 * `description` - The description of the role.
 * `max_session_duration` - Maximum session duration (in seconds) for the role.
 * `path` - The path to the role.
+* `tags` - Map of tags assigned to the role.
 * `unique_id` - Stable and unique string identifying the role.
 * `name` - See Argument Reference above.

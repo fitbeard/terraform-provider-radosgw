@@ -24,6 +24,7 @@ output "role_data" {
     description          = data.radosgw_iam_role.test.description
     assume_role_policy   = data.radosgw_iam_role.test.assume_role_policy
     max_session_duration = data.radosgw_iam_role.test.max_session_duration
+    tags                 = data.radosgw_iam_role.test.tags
     create_date          = data.radosgw_iam_role.test.create_date
     unique_id            = data.radosgw_iam_role.test.unique_id
   }

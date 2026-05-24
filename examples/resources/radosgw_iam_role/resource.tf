@@ -23,6 +23,11 @@ resource "radosgw_iam_role" "web_identity" {
   })
 
   max_session_duration = 3600 # 1 hour
+
+  tags = {
+    Environment = "production"
+    Service     = "web-identity"
+  }
 }
 
 # Create a role using the policy document data source
@@ -31,6 +36,10 @@ resource "radosgw_iam_role" "service_role" {
   path                 = "/service-roles/"
   assume_role_policy   = data.radosgw_iam_policy_document.trust_policy.json
   max_session_duration = 7200 # 2 hours
+
+  tags = {
+    Environment = "production"
+  }
 }
 
 # Trust policy using data source

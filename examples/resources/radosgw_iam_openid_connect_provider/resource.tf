@@ -16,7 +16,7 @@ resource "radosgw_iam_openid_connect_provider" "google" {
 
 # Create an OIDC provider for Keycloak
 resource "radosgw_iam_openid_connect_provider" "keycloak" {
-  url = "https://keycloak.example.com/auth/realms/myrealm"
+  url = "https://keycloak.example.com/realms/myrealm"
 
   client_id_list = [
     "my-app-client",

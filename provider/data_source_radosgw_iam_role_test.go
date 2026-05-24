@@ -49,6 +49,29 @@ func TestAccRadosgwIAMRoleDataSource_withPath(t *testing.T) {
 	})
 }
 
+func TestAccRadosgwIAMRoleDataSource_tags(t *testing.T) {
+	t.Parallel()
+
+	roleName := randomName("tf-acc-role")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRadosgwIAMRoleDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccRadosgwIAMRoleDataSourceConfig_tags(roleName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.radosgw_iam_role.test", "name", "radosgw_iam_role.test", "name"),
+					resource.TestCheckResourceAttr("data.radosgw_iam_role.test", "tags.%", "2"),
+					resource.TestCheckResourceAttr("data.radosgw_iam_role.test", "tags.Environment", "test"),
+					resource.TestCheckResourceAttr("data.radosgw_iam_role.test", "tags.Owner", "terraform"),
+				),
+			},
+		},
+	})
+}
+
 // Test configurations
 
 func testAccRadosgwIAMRoleDataSourceConfig_basic(roleName string) string {
@@ -104,4 +127,36 @@ data "radosgw_iam_role" "test" {
   depends_on = [radosgw_iam_role.test]
 }
 `, roleName, path)
+}
+
+func testAccRadosgwIAMRoleDataSourceConfig_tags(roleName string) string {
+	return providerConfig() + fmt.Sprintf(`
+resource "radosgw_iam_role" "test" {
+  name = %q
+
+  tags = {
+    Environment = "test"
+    Owner       = "terraform"
+  }
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = "*"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+data "radosgw_iam_role" "test" {
+  name = radosgw_iam_role.test.name
+
+  depends_on = [radosgw_iam_role.test]
+}
+`, roleName)
 }

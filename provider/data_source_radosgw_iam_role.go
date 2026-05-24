@@ -33,6 +33,7 @@ type RoleDataSourceModel struct {
 	Description        types.String `tfsdk:"description"`
 	AssumeRolePolicy   types.String `tfsdk:"assume_role_policy"`
 	MaxSessionDuration types.Int64  `tfsdk:"max_session_duration"`
+	Tags               types.Map    `tfsdk:"tags"`
 	ARN                types.String `tfsdk:"arn"`
 	CreateDate         types.String `tfsdk:"create_date"`
 	UniqueID           types.String `tfsdk:"unique_id"`
@@ -67,6 +68,11 @@ func (d *RoleDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 			"max_session_duration": schema.Int64Attribute{
 				MarkdownDescription: "Maximum session duration (in seconds) for the role.",
 				Computed:            true,
+			},
+			"tags": schema.MapAttribute{
+				MarkdownDescription: "Map of tags assigned to the role.",
+				Computed:            true,
+				ElementType:         types.StringType,
 			},
 			"arn": schema.StringAttribute{
 				MarkdownDescription: "Amazon Resource Name (ARN) of the role.",
@@ -173,6 +179,21 @@ func (d *RoleDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	} else {
 		config.Description = types.StringNull()
 	}
+
+	tags, err := listRoleTags(ctx, d.iamClient, roleName)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Reading Role Tags",
+			fmt.Sprintf("Could not read tags for role %s: %s", roleName, err.Error()),
+		)
+		return
+	}
+	tagsMap, diags := types.MapValueFrom(ctx, types.StringType, tags)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	config.Tags = tagsMap
 
 	tflog.Trace(ctx, "Read role data source", map[string]any{
 		"name": role.RoleName,

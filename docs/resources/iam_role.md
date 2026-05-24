@@ -37,6 +37,11 @@ resource "radosgw_iam_role" "web_identity" {
   })
 
   max_session_duration = 3600 # 1 hour
+
+  tags = {
+    Environment = "production"
+    Service     = "web-identity"
+  }
 }
 
 # Create a role using the policy document data source
@@ -45,6 +50,10 @@ resource "radosgw_iam_role" "service_role" {
   path                 = "/service-roles/"
   assume_role_policy   = data.radosgw_iam_policy_document.trust_policy.json
   max_session_duration = 7200 # 2 hours
+
+  tags = {
+    Environment = "production"
+  }
 }
 
 # Trust policy using data source
@@ -81,6 +90,7 @@ The following arguments are supported:
 * `description` - (Optional) A description of the role. Maximum 1000 characters. ~> **Note:** This field is stored in state but may not be returned by the RadosGW API on older Ceph versions (Reef 18.x). The provider preserves the configured value in this case.
 * `max_session_duration` - (Optional) Maximum session duration (in seconds) for the role. Default is 3600 (1 hour). Valid values: 3600-43200 (1-12 hours).
 * `path` - (Optional) The path to the role. Default is `/`. Paths must begin and end with `/`.
+* `tags` - (Optional) Map of tags to assign to the role.
 
 
 
@@ -97,6 +107,7 @@ The following attributes are exported:
 * `description` - See Argument Reference above.
 * `max_session_duration` - See Argument Reference above.
 * `path` - See Argument Reference above.
+* `tags` - See Argument Reference above.
 ## Import
 
 Import is supported using the following syntax:
