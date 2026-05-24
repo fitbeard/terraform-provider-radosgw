@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.2.3...v1.3.0) (2026-05-24)
+
+
+### Features
+
+* add tags for iam_role ([#74](https://github.com/fitbeard/terraform-provider-radosgw/issues/74)) ([7d6f8f0](https://github.com/fitbeard/terraform-provider-radosgw/commit/7d6f8f013a73ed6f0a43b6de8d2a7526616918df))
+
+
+### Miscellaneous
+
+* **deps:** Bump github.com/aws/aws-sdk-go-v2/credentials ([#73](https://github.com/fitbeard/terraform-provider-radosgw/issues/73)) ([6962dbe](https://github.com/fitbeard/terraform-provider-radosgw/commit/6962dbe87739d63a6c26e0657a9cb71b4cdbf4e2))
+
 ## [1.2.3](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.2.2...v1.2.3) (2026-05-19)
 
 
