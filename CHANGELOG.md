@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.4.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.3.0...v1.4.0) (2026-07-06)
+
+
+### Features
+
+* add initial account support ([#86](https://github.com/fitbeard/terraform-provider-radosgw/issues/86)) ([4ab676e](https://github.com/fitbeard/terraform-provider-radosgw/commit/4ab676ed1253cf956570a66df4a5fb5903271622))
+
+
+### Miscellaneous
+
+* **deps:** Bump actions/checkout from 6 to 7 ([#81](https://github.com/fitbeard/terraform-provider-radosgw/issues/81)) ([b68ecde](https://github.com/fitbeard/terraform-provider-radosgw/commit/b68ecdef6aa943671b762db12e0635c42ab81c3b))
+* **deps:** Bump github.com/aws/smithy-go from 1.27.1 to 1.27.3 ([#84](https://github.com/fitbeard/terraform-provider-radosgw/issues/84)) ([679a6a9](https://github.com/fitbeard/terraform-provider-radosgw/commit/679a6a9bde9c9217ce6cdf3ecf0c82290942102d))
+* **deps:** Bump github.com/ceph/go-ceph from 0.39.0 to 0.40.0 ([#82](https://github.com/fitbeard/terraform-provider-radosgw/issues/82)) ([4c6a4ce](https://github.com/fitbeard/terraform-provider-radosgw/commit/4c6a4ceaeeb9347fe4b9b059d27568ff7ed8f498))
+* **deps:** Bump the aws-sdk group with 3 updates ([#76](https://github.com/fitbeard/terraform-provider-radosgw/issues/76)) ([4b6abb9](https://github.com/fitbeard/terraform-provider-radosgw/commit/4b6abb9ab4fe0ac5791c92ccd547e0ee80a44fdd))
+* **deps:** Bump the aws-sdk group with 3 updates ([#78](https://github.com/fitbeard/terraform-provider-radosgw/issues/78)) ([0acaf24](https://github.com/fitbeard/terraform-provider-radosgw/commit/0acaf24ea76d37c7216524e343f7b59050b2ba6e))
+* **deps:** Bump the aws-sdk group with 3 updates ([#80](https://github.com/fitbeard/terraform-provider-radosgw/issues/80)) ([3773feb](https://github.com/fitbeard/terraform-provider-radosgw/commit/3773feb094746df0927252e976b7725b3c9c39dc))
+
 ## [1.3.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.2.3...v1.3.0) (2026-05-24)
 
 
