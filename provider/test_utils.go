@@ -106,6 +106,13 @@ func randomEmail() string {
 	return fmt.Sprintf("%s@example.com", acctest.RandString(10))
 }
 
+// randomAccountID generates the numeric portion of a RadosGW account ID.
+// Account IDs have the form "RGW" followed by 17 numeric digits, so callers
+// typically prefix the result with "RGW".
+func randomAccountID() string {
+	return acctest.RandStringFromCharSet(17, "0123456789")
+}
+
 // providerConfig returns the provider configuration block for tests.
 func providerConfig() string {
 	return `

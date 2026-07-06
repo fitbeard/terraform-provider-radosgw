@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/ceph/go-ceph/rgw/admin"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 )
@@ -89,6 +91,26 @@ func retryOnNotFound(ctx context.Context, operation string, isNotFound func(erro
 		}
 		return retry.NonRetryableError(err)
 	})
+}
+
+// =============================================================================
+// Account Helpers
+// =============================================================================
+
+// isAccountNotFoundError reports whether err indicates that a RadosGW account
+// does not exist. The Admin API returns "NoSuchKey" when an account cannot be
+// found (see GetAccount after deletion); some builds may return "NoSuchAccount".
+// go-ceph surfaces these as admin.errorReason values, so errors.Is against the
+// exported reason works, with a defensive string match as a fallback.
+func isAccountNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, admin.ErrNoSuchKey) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "NoSuchKey") || strings.Contains(msg, "NoSuchAccount")
 }
 
 // =============================================================================

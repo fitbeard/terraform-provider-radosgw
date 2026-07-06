@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -139,6 +140,11 @@ func (d *RolesDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	for {
 		body, err := d.iamClient.DoRequest(ctx, params, "iam")
 		if err != nil {
+			// Squid returns NoSuchEntity when no roles exist. Treat this as an
+			// empty result set rather than a hard error.
+			if errors.Is(err, ErrNoSuchEntity) {
+				break
+			}
 			resp.Diagnostics.AddError(
 				"Error Reading RadosGW Roles",
 				fmt.Sprintf("Could not list roles: %s", err.Error()),

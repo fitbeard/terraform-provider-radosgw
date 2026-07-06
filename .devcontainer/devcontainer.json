@@ -14,6 +14,9 @@
       "version": "1.25.8",
       "golangciLintVersion": "2.8.0"
     },
+    "ghcr.io/devcontainers-extra/features/gh-cli:1": {
+      "version": "2.96.0"
+    },
     "ghcr.io/devcontainers-extra/features/opentofu:1": {
       "version": "1.9.1"
     },
