@@ -51,12 +51,14 @@ The following arguments are supported:
 * `user_id` - (Required) The local user ID. For tenant users, this remains the user name without the tenant prefix; use `id` when another resource needs the tenant-qualified RGW user ID.
 
 
+* `account_id` - (Optional) The ID of the account (`radosgw_iam_account`) this user belongs to. When set, the user is created within the account and the account owns its resources. Changing it (including removing it, which returns the user to no account) forces the user to be recreated. Requires Ceph Squid (19.x) or later. Note: RadosGW treats an account user's `display_name` as an IAM entity name, so for account users it must not contain spaces.
+* `account_root` - (Optional) Whether this user is the account root user (able to manage the account's IAM resources). Only valid together with `account_id`. Can be toggled in place without recreating the user. Defaults to `false`, so removing it from the configuration demotes a root user.
 * `default_placement` - (Optional) The default placement for the user's buckets. Note: Once set, this field cannot be cleared, only changed to a different value.
 * `email` - (Optional) The email address of the user. Note: Once set, this field cannot be cleared, only changed to a different value.
 * `max_buckets` - (Optional) The maximum number of buckets the user can own. Default is 1000.
 * `op_mask` - (Optional) The operation mask for the user. Default is 'read, write, delete'.
 * `suspended` - (Optional) Whether the user is suspended. Default is false.
-* `tenant` - (Optional) The tenant to which the user belongs. Cannot be modified after creation.
+* `tenant` - (Optional) The tenant to which the user belongs. Cannot be modified after creation. When the user belongs to an account (`account_id`), the tenant must exactly match the account's tenant — RadosGW does not inherit it, so leaving this empty for a tenanted account is rejected.
 
 
 
@@ -67,9 +69,11 @@ The following attributes are exported:
 
 * `default_storage_class` - The default storage class for the user's objects.
 * `id` - The tenant-qualified RGW user ID. For tenant users this is `tenant$user_id`; for non-tenant users this matches `user_id`.
-* `type` - The user type (e.g., 'rgw', 'ldap').
+* `type` - The user type (e.g., 'rgw', 'ldap', or 'root' for an account root user).
 * `display_name` - See Argument Reference above.
 * `user_id` - See Argument Reference above.
+* `account_id` - See Argument Reference above.
+* `account_root` - See Argument Reference above.
 * `default_placement` - See Argument Reference above.
 * `email` - See Argument Reference above.
 * `max_buckets` - See Argument Reference above.

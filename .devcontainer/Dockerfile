@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install --yes \
     wget \
     git \
     jq \
+    && apt-get upgrade --yes \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Workaround for https://tracker.ceph.com/issues/74199
