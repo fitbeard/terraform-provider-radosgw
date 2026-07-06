@@ -80,10 +80,13 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 			"as the account root via `account_root`.\n\n" +
 			"~> **Note:** Accounts require Ceph Squid (19.x) or later; they are not " +
 			"available on Reef (18.x).\n\n" +
-			"~> **Note:** Ceph **20.2.1** ships a bug where the account read and delete " +
-			"admin operations check for a mistyped `account` capability instead of " +
-			"`accounts`, making them permanently return `AccessDenied` (so refresh, " +
-			"import, and destroy fail). This is fixed in **20.2.2**; use 20.2.2 or later.\n\n" +
+			"~> **Note:** A capability-name bug affects the account read/delete admin " +
+			"operations on all Squid (19.2.x) releases and on Tentacle before 20.2.2: " +
+			"they check a mistyped `account` capability that cannot be granted, so a " +
+			"normal `accounts=*` user receives `AccessDenied` (refresh, import, and " +
+			"destroy fail). On those versions the provider's RadosGW user must be a " +
+			"**system user** (`radosgw-admin user modify --uid=<user> --system`). Ceph " +
+			"**20.2.2+** fixes this and works with `accounts=*` alone.\n\n" +
 			"~> **Note:** This resource requires the `accounts=*` capability on the " +
 			"RadosGW user configured in the provider.\n\n" +
 			"~> **Note:** Account and default-bucket quota management is not supported " +

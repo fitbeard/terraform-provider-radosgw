@@ -5,7 +5,7 @@ description: |-
   Manages a RadosGW account.
   Accounts provide AWS IAM-style multi-tenancy: an account owns the users, roles, groups, and buckets created within it, and quotas apply to the account as a whole. Users are associated with an account through the account_id attribute of radosgw_iam_user, and one user may be marked as the account root via account_root.
   ~> Note: Accounts require Ceph Squid (19.x) or later; they are not available on Reef (18.x).
-  ~> Note: Ceph 20.2.1 ships a bug where the account read and delete admin operations check for a mistyped account capability instead of accounts, making them permanently return AccessDenied (so refresh, import, and destroy fail). This is fixed in 20.2.2; use 20.2.2 or later.
+  ~> Note: A capability-name bug affects the account read/delete admin operations on all Squid (19.2.x) releases and on Tentacle before 20.2.2: they check a mistyped account capability that cannot be granted, so a normal accounts=* user receives AccessDenied (refresh, import, and destroy fail). On those versions the provider's RadosGW user must be a system user (radosgw-admin user modify --uid=<user> --system). Ceph 20.2.2+ fixes this and works with accounts=* alone.
   ~> Note: This resource requires the accounts=* capability on the RadosGW user configured in the provider.
   ~> Note: Account and default-bucket quota management is not supported by this resource yet, because the underlying go-ceph library does not expose an account quota setter. Manage account quotas with radosgw-admin quota in the meantime; support will be added once available upstream.
 ---
@@ -18,7 +18,7 @@ Accounts provide AWS IAM-style multi-tenancy: an account owns the users, roles, 
 
 ~> **Note:** Accounts require Ceph Squid (19.x) or later; they are not available on Reef (18.x).
 
-~> **Note:** Ceph **20.2.1** ships a bug where the account read and delete admin operations check for a mistyped `account` capability instead of `accounts`, making them permanently return `AccessDenied` (so refresh, import, and destroy fail). This is fixed in **20.2.2**; use 20.2.2 or later.
+~> **Note:** A capability-name bug affects the account read/delete admin operations on all Squid (19.2.x) releases and on Tentacle before 20.2.2: they check a mistyped `account` capability that cannot be granted, so a normal `accounts=*` user receives `AccessDenied` (refresh, import, and destroy fail). On those versions the provider's RadosGW user must be a **system user** (`radosgw-admin user modify --uid=<user> --system`). Ceph **20.2.2+** fixes this and works with `accounts=*` alone.
 
 ~> **Note:** This resource requires the `accounts=*` capability on the RadosGW user configured in the provider.
 

@@ -35,17 +35,27 @@ if [[ "${normalized_version}" -ge 19 ]]; then
     CAPS="accounts=*;${CAPS}"
 fi
 
-echo "Creating RGW user: ${USER_ID} (detected Ceph major version: ${normalized_version})"
+# On Squid (19.x) the account get/delete admin ops check a mistyped `account`
+# capability that cannot be granted, so a non-system user always gets AccessDenied.
+# Only a system user bypasses it. Tentacle 20.2.2+ works with accounts=* directly,
+# so we keep the test user non-system there to exercise the real capability path.
+SYSTEM_FLAG=""
+if [[ "${normalized_version}" -eq 19 ]]; then
+    SYSTEM_FLAG="--system"
+fi
+
+echo "Creating RGW user: ${USER_ID} (detected Ceph major version: ${normalized_version}, system=$([[ -n "${SYSTEM_FLAG}" ]] && echo yes || echo no))"
 
 radosgw-admin --conf "${CEPH_DIR}/ceph.conf" user create \
     --uid="${USER_ID}" \
     --display-name="${DISPLAY_NAME}" \
     --access-key="${USER_ID}" \
     --secret-key="secretkey" \
-    --caps="${CAPS}"
+    --caps="${CAPS}" \
+    ${SYSTEM_FLAG}
 
 echo ""
-echo "User created successfully with caps: ${CAPS}"
+echo "User created successfully with caps: ${CAPS}${SYSTEM_FLAG:+ (system user)}"
 echo ""
 echo "To list all users:"
 echo "  radosgw-admin --conf ${CEPH_DIR}/ceph.conf user list"
