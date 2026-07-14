@@ -330,7 +330,14 @@ func (r *SNSTopicResource) Create(ctx context.Context, req resource.CreateReques
 	params.Set("Action", "CreateTopic")
 	params.Set("Name", plan.Name.ValueString())
 
-	body, err := r.iamClient.DoPostRequest(ctx, params, "sns")
+	// Retry transient errors (5xx / ConcurrentModification) from concurrent topic
+	// churn on RadosGW's shared per-owner topic metadata.
+	var body []byte
+	err := retryOnTransientSNSError(ctx, fmt.Sprintf("CreateTopic %s", plan.Name.ValueString()), func() error {
+		var reqErr error
+		body, reqErr = r.iamClient.DoPostRequest(ctx, params, "sns")
+		return reqErr
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating SNS Topic",
@@ -564,7 +571,10 @@ func (r *SNSTopicResource) Delete(ctx context.Context, req resource.DeleteReques
 	params.Set("Action", "DeleteTopic")
 	params.Set("TopicArn", state.ARN.ValueString())
 
-	_, err := r.iamClient.DoPostRequest(ctx, params, "sns")
+	err := retryOnTransientSNSError(ctx, fmt.Sprintf("DeleteTopic %s", state.ARN.ValueString()), func() error {
+		_, delErr := r.iamClient.DoPostRequest(ctx, params, "sns")
+		return delErr
+	})
 	if err != nil {
 		// Deleting an already-deleted topic is not considered an error by RadosGW
 		if isSNSTopicNotFound(err) {

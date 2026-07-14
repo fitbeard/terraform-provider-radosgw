@@ -180,10 +180,15 @@ func (r *S3BucketNotificationResource) Create(ctx context.Context, req resource.
 		return
 	}
 
-	// Put the notification configuration on the bucket
-	_, err := r.client.S3.PutBucketNotificationConfiguration(ctx, &s3.PutBucketNotificationConfigurationInput{
-		Bucket:                    aws.String(bucket),
-		NotificationConfiguration: notifConfig,
+	// Put the notification configuration on the bucket. Retry transient errors:
+	// under concurrent topic churn RadosGW can briefly fail to resolve a
+	// referenced topic and return NoSuchKey/5xx even though the topic exists.
+	err := retryOnTransientSNSError(ctx, fmt.Sprintf("PutBucketNotificationConfiguration %s", bucket), func() error {
+		_, putErr := r.client.S3.PutBucketNotificationConfiguration(ctx, &s3.PutBucketNotificationConfigurationInput{
+			Bucket:                    aws.String(bucket),
+			NotificationConfiguration: notifConfig,
+		})
+		return putErr
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -290,10 +295,13 @@ func (r *S3BucketNotificationResource) Update(ctx context.Context, req resource.
 	}
 
 	// Clear existing notifications first — RadosGW merges rather than replaces
-	// topic configurations when the topic ARN changes.
-	_, err := r.client.S3.PutBucketNotificationConfiguration(ctx, &s3.PutBucketNotificationConfigurationInput{
-		Bucket:                    aws.String(bucket),
-		NotificationConfiguration: &s3types.NotificationConfiguration{},
+	// topic configurations when the topic ARN changes. Retry transient errors.
+	err := retryOnTransientSNSError(ctx, fmt.Sprintf("PutBucketNotificationConfiguration(clear) %s", bucket), func() error {
+		_, putErr := r.client.S3.PutBucketNotificationConfiguration(ctx, &s3.PutBucketNotificationConfigurationInput{
+			Bucket:                    aws.String(bucket),
+			NotificationConfiguration: &s3types.NotificationConfiguration{},
+		})
+		return putErr
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -303,10 +311,15 @@ func (r *S3BucketNotificationResource) Update(ctx context.Context, req resource.
 		return
 	}
 
-	// Put the new notification configuration
-	_, err = r.client.S3.PutBucketNotificationConfiguration(ctx, &s3.PutBucketNotificationConfigurationInput{
-		Bucket:                    aws.String(bucket),
-		NotificationConfiguration: notifConfig,
+	// Put the new notification configuration. Retry transient errors: under
+	// concurrent topic churn RadosGW can briefly fail to resolve a referenced
+	// topic and return NoSuchKey/5xx even though the topic exists.
+	err = retryOnTransientSNSError(ctx, fmt.Sprintf("PutBucketNotificationConfiguration %s", bucket), func() error {
+		_, putErr := r.client.S3.PutBucketNotificationConfiguration(ctx, &s3.PutBucketNotificationConfigurationInput{
+			Bucket:                    aws.String(bucket),
+			NotificationConfiguration: notifConfig,
+		})
+		return putErr
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -353,10 +366,14 @@ func (r *S3BucketNotificationResource) Delete(ctx context.Context, req resource.
 
 	bucket := state.Bucket.ValueString()
 
-	// Delete by putting an empty notification configuration
-	_, err := r.client.S3.PutBucketNotificationConfiguration(ctx, &s3.PutBucketNotificationConfigurationInput{
-		Bucket:                    aws.String(bucket),
-		NotificationConfiguration: &s3types.NotificationConfiguration{},
+	// Delete by putting an empty notification configuration. Retry transient
+	// errors; a permanent NoSuchBucket is not retried and is handled below.
+	err := retryOnTransientSNSError(ctx, fmt.Sprintf("PutBucketNotificationConfiguration(delete) %s", bucket), func() error {
+		_, putErr := r.client.S3.PutBucketNotificationConfiguration(ctx, &s3.PutBucketNotificationConfigurationInput{
+			Bucket:                    aws.String(bucket),
+			NotificationConfiguration: &s3types.NotificationConfiguration{},
+		})
+		return putErr
 	})
 	if err != nil {
 		var apiErr smithy.APIError

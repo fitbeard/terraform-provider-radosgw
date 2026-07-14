@@ -15,6 +15,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/smithy-go"
 	"github.com/ceph/go-ceph/rgw/admin"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
@@ -84,6 +85,69 @@ func retryOnNotFound(ctx context.Context, operation string, isNotFound func(erro
 		}
 		if isNotFound(err) {
 			tflog.Debug(ctx, "Resource not yet visible, retrying", map[string]any{
+				"operation": operation,
+				"error":     err.Error(),
+			})
+			return retry.RetryableError(err)
+		}
+		return retry.NonRetryableError(err)
+	})
+}
+
+// SNSTransientRetryTimeout bounds retries of transient SNS/notification errors.
+// Contention on RadosGW's shared per-owner topic metadata resolves in well under
+// a second, so a short window absorbs it while a genuinely persistent error
+// (e.g. a real missing bucket) still surfaces quickly.
+const SNSTransientRetryTimeout = 30 * time.Second
+
+// isTransientSNSError reports whether err from an SNS topic or bucket-notification
+// operation is transient and worth retrying. Under concurrent topic churn for the
+// same owner, RadosGW's shared topic metadata can be briefly inconsistent, so
+// PutBucketNotificationConfiguration may return NoSuchKey, and CreateTopic/
+// DeleteTopic may return 5xx or ConcurrentModification, even for a valid request.
+func isTransientSNSError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if isConcurrentModificationError(err) {
+		return true
+	}
+
+	// API errors, e.g. from PutBucketNotificationConfiguration.
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.ErrorCode() {
+		case "NoSuchKey", "InternalError", "ServiceUnavailable", "SlowDown", "RequestTimeout":
+			return true
+		}
+	}
+
+	// IAM/SNS client errors (topic create/delete): any 5xx, plus the
+	// transient codes seen under contention.
+	var iamErr *IAMError
+	if errors.As(err, &iamErr) {
+		if iamErr.StatusCode >= 500 {
+			return true
+		}
+		switch iamErr.Code {
+		case "NoSuchKey", "InternalError", "ServiceUnavailable", "SlowDown":
+			return true
+		}
+	}
+
+	return false
+}
+
+// retryOnTransientSNSError wraps an SNS topic or bucket-notification operation
+// with retry logic for transient errors (see isTransientSNSError).
+func retryOnTransientSNSError(ctx context.Context, operation string, fn func() error) error {
+	return retry.RetryContext(ctx, SNSTransientRetryTimeout, func() *retry.RetryError {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+		if isTransientSNSError(err) {
+			tflog.Debug(ctx, "Transient SNS error, retrying", map[string]any{
 				"operation": operation,
 				"error":     err.Error(),
 			})
