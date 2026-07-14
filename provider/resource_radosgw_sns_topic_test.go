@@ -4,10 +4,15 @@ import (
 	"fmt"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
+
+// snsCheckRetryTimeout bounds retries in the SNS test check helpers, absorbing
+// the same shared-metadata eventual consistency the resources retry on.
+const snsCheckRetryTimeout = 30 * time.Second
 
 func TestAccRadosgwSNSTopic_basic(t *testing.T) {
 	t.Parallel()
@@ -195,12 +200,19 @@ func testAccCheckRadosgwSNSTopicExists(resourceName string) resource.TestCheckFu
 		params.Set("Action", "GetTopicAttributes")
 		params.Set("TopicArn", arn)
 
-		_, err := iamClient.DoRequest(testCtx, params, "sns")
-		if err != nil {
-			return fmt.Errorf("error verifying SNS topic %s exists: %s", arn, err)
+		// Retry to absorb transient inconsistency under concurrent topic churn.
+		deadline := time.Now().Add(snsCheckRetryTimeout)
+		var lastErr error
+		for {
+			_, lastErr = iamClient.DoRequest(testCtx, params, "sns")
+			if lastErr == nil {
+				return nil
+			}
+			if time.Now().After(deadline) {
+				return fmt.Errorf("error verifying SNS topic %s exists: %s", arn, lastErr)
+			}
+			time.Sleep(time.Second)
 		}
-
-		return nil
 	}
 }
 
@@ -230,13 +242,22 @@ func testAccCheckRadosgwSNSTopicDestroy(s *terraform.State) error {
 		params.Set("Action", "GetTopicAttributes")
 		params.Set("TopicArn", arn)
 
-		_, err := iamClient.DoRequest(testCtx, params, "sns")
-		if err == nil {
-			return fmt.Errorf("SNS topic %s still exists after destroy", arn)
-		}
-
-		if !isSNSTopicNotFound(err) {
-			return fmt.Errorf("unexpected error checking topic %s after destroy: %s", arn, err)
+		// Retry until the topic is reported gone. Under concurrent topic churn the
+		// topic can remain briefly visible after delete, or the check itself can
+		// hit a transient error; only fail if the condition persists.
+		deadline := time.Now().Add(snsCheckRetryTimeout)
+		for {
+			_, err := iamClient.DoRequest(testCtx, params, "sns")
+			if isSNSTopicNotFound(err) {
+				break
+			}
+			if time.Now().After(deadline) {
+				if err == nil {
+					return fmt.Errorf("SNS topic %s still exists after destroy", arn)
+				}
+				return fmt.Errorf("unexpected error checking topic %s after destroy: %s", arn, err)
+			}
+			time.Sleep(time.Second)
 		}
 	}
 	return nil
