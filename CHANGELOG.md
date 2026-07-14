@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.4.1](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.4.0...v1.4.1) (2026-07-14)
+
+
+### Bug Fixes
+
+* retry transient SNS/notification errors under concurrent topic churn ([#91](https://github.com/fitbeard/terraform-provider-radosgw/issues/91)) ([fd49b0a](https://github.com/fitbeard/terraform-provider-radosgw/commit/fd49b0a0e45f58b86032e4512094d9160873b9ec))
+
+
+### Miscellaneous
+
+* **deps:** Bump golang.org/x/crypto from 0.51.0 to 0.52.0 ([#89](https://github.com/fitbeard/terraform-provider-radosgw/issues/89)) ([e4276d0](https://github.com/fitbeard/terraform-provider-radosgw/commit/e4276d0e1197a4184dd87e06722684eb7c5faefd))
+* **deps:** Bump golang.org/x/net from 0.52.0 to 0.55.0 ([#90](https://github.com/fitbeard/terraform-provider-radosgw/issues/90)) ([411784f](https://github.com/fitbeard/terraform-provider-radosgw/commit/411784f141ca201b71a0256723390d0f18f95d72))
+* **deps:** Bump the aws-sdk group across 1 directory with 3 updates ([#88](https://github.com/fitbeard/terraform-provider-radosgw/issues/88)) ([3e2a4b7](https://github.com/fitbeard/terraform-provider-radosgw/commit/3e2a4b7be074a2700eb33d6a1233e220460596d3))
+
 ## [1.4.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.3.0...v1.4.0) (2026-07-06)
 
 
