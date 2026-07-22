@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.2](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.4.1...v1.4.2) (2026-07-22)
+
+
+### Bug Fixes
+
+* correct account limit defaults and support capless/federated & tenant users ([#98](https://github.com/fitbeard/terraform-provider-radosgw/issues/98)) ([2d603cf](https://github.com/fitbeard/terraform-provider-radosgw/commit/2d603cf34b0ac2bd987cf0c16a34e5f00378327e))
+
 ## [1.4.1](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.4.0...v1.4.1) (2026-07-14)
 
 
