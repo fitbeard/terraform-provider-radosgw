@@ -168,36 +168,49 @@ func (d *BucketDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	}
 
 	bucketName := config.Bucket.ValueString()
+	tenant := config.Tenant.ValueString()
+	fullBucketName := bucketName
+	if tenant != "" {
+		fullBucketName = tenant + ":" + bucketName
+	}
 
 	tflog.Debug(ctx, "Reading RadosGW bucket", map[string]any{
 		"bucket": bucketName,
 	})
 
-	// Get bucket info from Admin API
+	// Prefer the Admin API for full metadata (backward compatible for users with
+	// the buckets cap).
 	bucketInfo, err := d.client.Admin.GetBucketInfo(ctx, admin.Bucket{Bucket: bucketName})
-	if err != nil {
-		if isBucketNotFoundError(err) {
-			resp.Diagnostics.AddError(
-				"Bucket Not Found",
-				fmt.Sprintf("Bucket %q does not exist.", bucketName),
-			)
-			return
-		}
+	if err == nil {
+		d.populateModelFromBucketInfo(ctx, &config, &bucketInfo)
+		resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+		return
+	}
+
+	// Admin API unavailable (e.g. a Keystone-federated user without caps).
+	// Confirm existence and populate the S3-derivable fields over the S3 API.
+	exists, headErr := bucketExistsViaS3(ctx, d.client.S3, fullBucketName)
+	if headErr != nil || !exists {
 		resp.Diagnostics.AddError(
-			"Error Reading Bucket",
-			fmt.Sprintf("Could not read bucket %q: %s", bucketName, err.Error()),
+			"Bucket Not Found",
+			fmt.Sprintf("Bucket %q could not be read (admin API: %s).", bucketName, err.Error()),
 		)
 		return
 	}
 
-	tflog.Debug(ctx, "Found bucket", map[string]any{
-		"bucket": bucketName,
-		"id":     bucketInfo.ID,
-		"owner":  bucketInfo.Owner,
-	})
-
-	// Populate model from bucket info
-	d.populateModelFromBucketInfo(ctx, &config, &bucketInfo)
+	tflog.Debug(ctx, "Admin API unavailable; reading bucket via S3-only metadata", map[string]any{"bucket": bucketName})
+	owner, creationTime, versioning := deriveBucketS3Fields(ctx, d.client.S3, bucketName, fullBucketName)
+	config.ID = types.StringValue(bucketName)
+	config.Owner = owner
+	config.CreationTime = creationTime
+	config.Versioning = versioning
+	// Admin-only attributes are unavailable without caps.
+	config.Tenant = types.StringValue(tenant)
+	config.PlacementRule = types.StringNull()
+	config.Zonegroup = types.StringNull()
+	config.Marker = types.StringNull()
+	config.IndexType = types.StringNull()
+	config.NumShards = types.Int64Null()
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }

@@ -21,8 +21,38 @@ resource "radosgw_iam_account" "team" {
 }
 
 resource "radosgw_iam_user" "team_root" {
+  # NOTE: account users' display_name must not contain spaces.
   user_id      = "team-root"
   display_name = "TeamRootUser"
   account_id   = radosgw_iam_account.team.account_id
   account_root = true
 }
+
+# Give the account root explicit credentials. The account root has full access
+# to everything inside the account, so these keys can configure a second,
+# aliased provider that manages the account's own resources (buckets, roles,
+# IAM users/policies). Non-root members instead need IAM policies granting the
+# specific actions (see the "Permissions" section of this page).
+resource "radosgw_iam_access_key" "team_root" {
+  user_id    = radosgw_iam_user.team_root.user_id
+  access_key = "TEAMROOTACCESSKEY0001"
+  secret_key = "TeamRootSecretKey0123456789012345"
+}
+
+# Example of the two-provider pattern this enables:
+#
+#   provider "radosgw" {
+#     alias      = "team"
+#     endpoint   = "http://rgw.example.com:7480"
+#     access_key = radosgw_iam_access_key.team_root.access_key
+#     secret_key = radosgw_iam_access_key.team_root.secret_key
+#   }
+#
+#   resource "radosgw_s3_bucket" "in_account" {
+#     provider   = radosgw.team
+#     bucket     = "team-data"
+#     depends_on = [radosgw_iam_access_key.team_root]
+#   }
+#
+# A provider block cannot reference computed values, so in real configurations
+# use hard-coded keys (as above) or variables.

@@ -86,7 +86,9 @@ func (r *BucketResource) Metadata(ctx context.Context, req resource.MetadataRequ
 
 func (r *BucketResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Manages an S3 bucket in Ceph RadosGW. This resource creates buckets via the S3 API and manages bucket configuration through both S3 and Admin APIs.",
+		MarkdownDescription: "Manages an S3 bucket in Ceph RadosGW. This resource creates buckets via the S3 API and enriches them with metadata from the Admin API when available.\n\n" +
+			"~> **Users without admin capabilities** (e.g. authenticated via OpenStack Keystone federation, or an account root user): bucket create/read/update/delete work over the S3 API alone, and the S3-derivable attributes (`owner`, `creation_time`, `versioning`) are still populated. The Admin-API-only attributes — `id`, `marker`, `num_shards`, `index_type`, `placement_rule`, `zonegroup`, `explicit_placement`, and `bucket_quota` — are `null` because they require the `buckets` capability / admin-ops access. `force_destroy` also falls back to emptying the bucket over S3.\n\n" +
+			"~> **Account users:** a non-root account user has no permissions by default and can only create buckets once the account root grants it an IAM policy (or role/group) allowing the S3 action; otherwise `CreateBucket` fails with `AccessDenied`. An account root user has full access to its account's resources without a policy.",
 
 		Attributes: map[string]schema.Attribute{
 			// User-configurable attributes
@@ -325,20 +327,33 @@ func (r *BucketResource) Create(ctx context.Context, req resource.CreateRequest,
 		}
 	}
 
-	// Read bucket info from Admin API to populate computed fields
+	// Read bucket info from Admin API to populate computed fields.
 	bucketInfo, err := r.client.Admin.GetBucketInfo(ctx, admin.Bucket{Bucket: bucketName})
 	if err != nil {
-		tflog.Warn(ctx, "Could not get bucket info after creation", map[string]any{
+		// The Admin API is unavailable (e.g. a Keystone-federated user without
+		// caps) or the bucket lives in a tenant namespace the plain name can't
+		// address. Set all admin-only computed fields to null so state is valid,
+		// and populate the S3-derivable fields (owner/creation_time/versioning)
+		// via the S3 API, which works with the configured user's own credentials.
+		tflog.Warn(ctx, "Admin API unavailable after bucket creation; falling back to S3-only metadata", map[string]any{
 			"bucket": bucketName,
 			"error":  err.Error(),
 		})
 		data.ID = types.StringValue(bucketName)
+		data.Marker = types.StringNull()
+		data.NumShards = types.Int64Null()
+		data.IndexType = types.StringNull()
+		data.PlacementRule = types.StringNull()
+		data.Zonegroup = types.StringNull()
 		data.ExplicitPlacement = types.ObjectNull(explicitPlacementAttrTypes())
 		data.Acl = types.StringNull()
-		data.Owner = types.StringNull()
+		if data.Tenant.IsUnknown() {
+			data.Tenant = types.StringValue(tenant)
+		}
 		if data.BucketQuota.IsNull() || data.BucketQuota.IsUnknown() {
 			data.BucketQuota = types.ObjectNull(bucketQuotaAttrTypes())
 		}
+		r.populateBucketFromS3(ctx, &data, fullBucketName)
 	} else {
 		r.populateModelFromBucketInfo(ctx, &data, &bucketInfo)
 	}
@@ -355,18 +370,36 @@ func (r *BucketResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 
 	bucketName := data.Bucket.ValueString()
+	tenant := data.Tenant.ValueString()
+	fullBucketName := bucketName
+	if tenant != "" {
+		fullBucketName = tenant + ":" + bucketName
+	}
+
+	// Preserve user-configured values that aren't returned by the Admin API.
+	forceDestroy := data.ForceDestroy
 
 	tflog.Debug(ctx, "Reading bucket", map[string]any{
 		"bucket": bucketName,
 	})
 
-	// Get bucket info from Admin API
+	// Prefer the Admin API (richest metadata). Backward compatible: users with
+	// the buckets cap get the full attribute set exactly as before.
 	bucketInfo, err := r.client.Admin.GetBucketInfo(ctx, admin.Bucket{Bucket: bucketName})
-	if err != nil {
+	if err == nil {
+		r.populateModelFromBucketInfo(ctx, &data, &bucketInfo)
+		data.ForceDestroy = forceDestroy
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+		return
+	}
+
+	// Admin API unavailable — use the S3 API to determine existence (works with
+	// the user's own credentials and resolves their tenant namespace).
+	exists, headErr := bucketExistsViaS3(ctx, r.client.S3, fullBucketName)
+	if headErr != nil {
+		// Could not confirm via S3 either: trust an Admin "not found", otherwise
+		// surface the original error.
 		if isBucketNotFoundError(err) {
-			tflog.Debug(ctx, "Bucket not found, removing from state", map[string]any{
-				"bucket": bucketName,
-			})
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -376,13 +409,17 @@ func (r *BucketResource) Read(ctx context.Context, req resource.ReadRequest, res
 		)
 		return
 	}
+	if !exists {
+		tflog.Debug(ctx, "Bucket not found, removing from state", map[string]any{"bucket": bucketName})
+		resp.State.RemoveResource(ctx)
+		return
+	}
 
-	// Preserve user-configured values that aren't returned by Admin API
-	forceDestroy := data.ForceDestroy
-
-	r.populateModelFromBucketInfo(ctx, &data, &bucketInfo)
-
-	// Restore force_destroy from state (not returned by Admin API)
+	// Bucket exists but Admin metadata is unavailable. Admin-only fields are kept
+	// as-is from prior state (already loaded into data); refresh the S3-derivable
+	// fields to detect drift.
+	tflog.Debug(ctx, "Admin API unavailable; refreshing bucket via S3-only metadata", map[string]any{"bucket": bucketName})
+	r.populateBucketFromS3(ctx, &data, fullBucketName)
 	data.ForceDestroy = forceDestroy
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -437,21 +474,31 @@ func (r *BucketResource) Update(ctx context.Context, req resource.UpdateRequest,
 		}
 	}
 
-	// Re-read bucket info to get fresh computed values
+	// Re-read bucket info to get fresh computed values.
 	bucketInfo, err := r.client.Admin.GetBucketInfo(ctx, admin.Bucket{Bucket: bucketName})
 	if err != nil {
-		tflog.Warn(ctx, "Could not refresh bucket info during update", map[string]any{
+		tflog.Warn(ctx, "Admin API unavailable during update; keeping admin-only fields and refreshing via S3", map[string]any{
 			"bucket": bucketName,
 			"error":  err.Error(),
 		})
-		// Keep most state values but update user-configurable ones
+		// Admin-only fields cannot be refreshed without caps; preserve their prior
+		// state values to avoid drift.
 		data.ID = state.ID
-		data.CreationTime = state.CreationTime
 		data.Zonegroup = state.Zonegroup
 		data.NumShards = state.NumShards
 		data.Marker = state.Marker
 		data.IndexType = state.IndexType
+		data.PlacementRule = state.PlacementRule
 		data.ExplicitPlacement = state.ExplicitPlacement
+		data.Acl = types.StringNull()
+		if data.Tenant.IsUnknown() {
+			data.Tenant = state.Tenant
+		}
+		if data.BucketQuota.IsUnknown() {
+			data.BucketQuota = state.BucketQuota
+		}
+		// Refresh S3-derivable fields (owner/creation_time/versioning).
+		r.populateBucketFromS3(ctx, &data, fullBucketName)
 	} else {
 		r.populateModelFromBucketInfo(ctx, &data, &bucketInfo)
 	}
@@ -468,6 +515,11 @@ func (r *BucketResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 
 	bucketName := data.Bucket.ValueString()
+	tenant := data.Tenant.ValueString()
+	fullBucketName := bucketName
+	if tenant != "" {
+		fullBucketName = tenant + ":" + bucketName
+	}
 	forceDestroy := data.ForceDestroy.ValueBool()
 
 	tflog.Debug(ctx, "Deleting bucket", map[string]any{
@@ -476,29 +528,40 @@ func (r *BucketResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	})
 
 	if forceDestroy {
-		// Use Admin API to remove bucket with purge-objects option
+		// Prefer the Admin API (purge-objects) — backward compatible for users
+		// with the buckets cap.
 		purge := true
 		err := r.client.Admin.RemoveBucket(ctx, admin.Bucket{
 			Bucket:      bucketName,
 			PurgeObject: &purge,
 		})
-		if err != nil {
-			if isBucketNotFoundError(err) {
-				tflog.Debug(ctx, "Bucket already deleted", map[string]any{
-					"bucket": bucketName,
-				})
+		if err == nil {
+			// deleted via admin
+		} else if isBucketNotFoundError(err) {
+			tflog.Debug(ctx, "Bucket already deleted", map[string]any{"bucket": bucketName})
+			return
+		} else {
+			// Admin API unavailable (e.g. a Keystone-federated user without caps).
+			// Fall back to emptying and deleting the bucket over S3.
+			tflog.Warn(ctx, "Admin RemoveBucket failed; falling back to S3 force-destroy", map[string]any{
+				"bucket": bucketName,
+				"error":  err.Error(),
+			})
+			if s3Err := r.emptyAndDeleteBucketViaS3(ctx, fullBucketName); s3Err != nil {
+				if isS3BucketNotFound(s3Err) {
+					return
+				}
+				resp.Diagnostics.AddError(
+					"Error Deleting Bucket",
+					fmt.Sprintf("Could not delete bucket %s with force_destroy: admin API error: %s; S3 fallback error: %s", bucketName, err.Error(), s3Err.Error()),
+				)
 				return
 			}
-			resp.Diagnostics.AddError(
-				"Error Deleting Bucket",
-				fmt.Sprintf("Could not delete bucket %s with force_destroy: %s", bucketName, err.Error()),
-			)
-			return
 		}
 	} else {
 		// Use S3 API for standard deletion (bucket must be empty)
 		_, err := r.client.S3.DeleteBucket(ctx, &s3.DeleteBucketInput{
-			Bucket: &bucketName,
+			Bucket: &fullBucketName,
 		})
 		if err != nil {
 			var ae smithy.APIError
@@ -710,4 +773,140 @@ func (r *BucketResource) populateModelFromBucketInfo(ctx context.Context, data *
 // isBucketNotFoundError checks if an error indicates the bucket doesn't exist.
 func isBucketNotFoundError(err error) bool {
 	return errors.Is(err, admin.ErrNoSuchBucket)
+}
+
+// bucketExistsViaS3 reports whether the bucket exists using the S3 API, which
+// works with the configured user's own credentials (no admin caps required) and
+// resolves the user's tenant namespace. Used as the source of truth for
+// existence when the Admin API is unavailable.
+func bucketExistsViaS3(ctx context.Context, s3c *s3.Client, bucket string) (bool, error) {
+	_, err := s3c.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &bucket})
+	if err == nil {
+		return true, nil
+	}
+	var notFound *s3types.NotFound
+	if errors.As(err, &notFound) {
+		return false, nil
+	}
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.ErrorCode() {
+		case "NotFound", "NoSuchBucket", "404":
+			return false, nil
+		}
+	}
+	return false, err
+}
+
+// isS3BucketNotFound reports whether an S3 error means the bucket does not exist.
+func isS3BucketNotFound(err error) bool {
+	var notFound *s3types.NotFound
+	if errors.As(err, &notFound) {
+		return true
+	}
+	var noBucket *s3types.NoSuchBucket
+	if errors.As(err, &noBucket) {
+		return true
+	}
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.ErrorCode() {
+		case "NotFound", "NoSuchBucket", "404":
+			return true
+		}
+	}
+	return false
+}
+
+// emptyAndDeleteBucketViaS3 removes all objects (including versions and delete
+// markers) and then the bucket, using only the S3 API. This is the force_destroy
+// path for users without admin caps (the Admin RemoveBucket purge is unavailable).
+func (r *BucketResource) emptyAndDeleteBucketViaS3(ctx context.Context, bucket string) error {
+	// ListObjectVersions returns current objects for unversioned buckets too, so
+	// this single pass covers both versioned and unversioned buckets.
+	pager := s3.NewListObjectVersionsPaginator(r.client.S3, &s3.ListObjectVersionsInput{Bucket: &bucket})
+	for pager.HasMorePages() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return err
+		}
+		ids := make([]s3types.ObjectIdentifier, 0, len(page.Versions)+len(page.DeleteMarkers))
+		for _, v := range page.Versions {
+			ids = append(ids, s3types.ObjectIdentifier{Key: v.Key, VersionId: v.VersionId})
+		}
+		for _, m := range page.DeleteMarkers {
+			ids = append(ids, s3types.ObjectIdentifier{Key: m.Key, VersionId: m.VersionId})
+		}
+		if len(ids) > 0 {
+			if _, err := r.client.S3.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+				Bucket: &bucket,
+				Delete: &s3types.Delete{Objects: ids},
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	_, err := r.client.S3.DeleteBucket(ctx, &s3.DeleteBucketInput{Bucket: &bucket})
+	return err
+}
+
+// deriveBucketS3Fields fetches the S3-derivable bucket attributes (owner,
+// creation_time, versioning) via the S3 API, which works with the configured
+// user's own credentials — no admin caps required. Each returned value is null
+// if the S3 API could not provide it. fullName is the tenant-qualified name for
+// GetBucketAcl/GetBucketVersioning; ListBuckets returns plain names, so plainName
+// is matched there. Shared by the resource and the data source.
+func deriveBucketS3Fields(ctx context.Context, s3c *s3.Client, plainName, fullName string) (owner, creationTime, versioning types.String) {
+	owner, creationTime, versioning = types.StringNull(), types.StringNull(), types.StringNull()
+
+	if acl, err := s3c.GetBucketAcl(ctx, &s3.GetBucketAclInput{Bucket: &fullName}); err == nil &&
+		acl.Owner != nil && acl.Owner.ID != nil {
+		owner = types.StringValue(*acl.Owner.ID)
+	}
+
+	if ver, err := s3c.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{Bucket: &fullName}); err == nil {
+		switch ver.Status {
+		case s3types.BucketVersioningStatusEnabled:
+			versioning = types.StringValue("enabled")
+		case s3types.BucketVersioningStatusSuspended:
+			versioning = types.StringValue("suspended")
+		default:
+			versioning = types.StringValue("off")
+		}
+	}
+
+	if out, err := s3c.ListBuckets(ctx, &s3.ListBucketsInput{}); err == nil {
+		for _, b := range out.Buckets {
+			if b.Name != nil && *b.Name == plainName && b.CreationDate != nil {
+				creationTime = types.StringValue(b.CreationDate.Format("2006-01-02T15:04:05Z07:00"))
+				break
+			}
+		}
+	}
+	return owner, creationTime, versioning
+}
+
+// populateBucketFromS3 fills the S3-derivable computed attributes on the resource
+// model when the Admin API is unavailable. Best-effort: a field is only set to a
+// safe known value so state never contains an unknown.
+func (r *BucketResource) populateBucketFromS3(ctx context.Context, data *BucketResourceModel, fullBucketName string) {
+	owner, creationTime, versioning := deriveBucketS3Fields(ctx, r.client.S3, data.Bucket.ValueString(), fullBucketName)
+
+	if !owner.IsNull() {
+		data.Owner = owner
+	} else if data.Owner.IsUnknown() {
+		data.Owner = types.StringNull()
+	}
+
+	if !versioning.IsNull() {
+		data.Versioning = versioning
+	} else if data.Versioning.IsUnknown() {
+		data.Versioning = types.StringValue("off")
+	}
+
+	if !creationTime.IsNull() {
+		data.CreationTime = creationTime
+	} else if data.CreationTime.IsUnknown() {
+		data.CreationTime = types.StringNull()
+	}
 }

@@ -9,13 +9,16 @@ description: |-
   |------------|-----------|
   | `accounts=*` | `radosgw_iam_account` (and the `account_id`/`account_root` attributes of `radosgw_iam_user`) |
   | `users=*` |`radosgw_iam_user`, `radosgw_iam_subuser`, `radosgw_iam_access_key`, `radosgw_iam_user_caps`, `radosgw_iam_quota`, `radosgw_iam_user`, `radosgw_iam_users` |
-  | `buckets=*` | `radosgw_s3_bucket`, `radosgw_s3_bucket_link`, `radosgw_s3_bucket_acl`, `radosgw_s3_bucket_policy`, `radosgw_s3_bucket_lifecycle_configuration` |
+  | `buckets=*` | `radosgw_s3_bucket_link`; `radosgw_s3_bucket` (only for the Admin-API metadata — it falls back to the S3 API without this cap) |
   | `oidc-provider=*` | `radosgw_iam_openid_connect_provider` |
   | `roles=*` | `radosgw_iam_role`, `radosgw_iam_role_policy`, `radosgw_iam_roles` |
   | `metadata=*` | `radosgw_iam_users` |
-  To grant all required capabilities to a user:
+  To grant all capabilities to a user:
   
   radosgw-admin caps add --uid=admin --caps="accounts=*;buckets=*;metadata=*;oidc-provider=*;roles=*;users=*"
+  
+  ~> These capabilities authorize the Admin Ops API and are cluster-wide (not scoped to a tenant or account). The S3 bucket sub-resources (radosgw_s3_bucket_acl, radosgw_s3_bucket_policy, radosgw_s3_bucket_notification, radosgw_s3_bucket_lifecycle_configuration, radosgw_s3_bucket_website_configuration) and the IAM/STS resources (radosgw_iam_role, radosgw_iam_role_policy, radosgw_iam_openid_connect_provider, radosgw_sns_topic) use the S3/IAM APIs directly and need no admin capability — they work with the configured user's own S3/IAM permissions.
+  ~> Federated and account users. A user authenticated via OpenStack Keystone, or an account root user, usually has no admin capabilities. Such users can still manage S3-based resources (for example radosgw_s3_bucket is created over the S3 API, with Admin-API-only metadata left null). Admin capabilities can be granted to an account user with radosgw-admin caps add to enable the Admin-API-backed resources — but this grants cluster-wide admin-ops access and is independent of the account's IAM policies (which govern that account's own S3/IAM data-plane actions).
 ---
 
 # radosgw Provider
@@ -30,16 +33,20 @@ The RadosGW user configured in this provider requires specific capabilities to m
 |------------|-----------|
 | `accounts=*` | `radosgw_iam_account` (and the `account_id`/`account_root` attributes of `radosgw_iam_user`) |
 | `users=*` |`radosgw_iam_user`, `radosgw_iam_subuser`, `radosgw_iam_access_key`, `radosgw_iam_user_caps`, `radosgw_iam_quota`, `radosgw_iam_user`, `radosgw_iam_users` |
-| `buckets=*` | `radosgw_s3_bucket`, `radosgw_s3_bucket_link`, `radosgw_s3_bucket_acl`, `radosgw_s3_bucket_policy`, `radosgw_s3_bucket_lifecycle_configuration` |
+| `buckets=*` | `radosgw_s3_bucket_link`; `radosgw_s3_bucket` (only for the Admin-API metadata — it falls back to the S3 API without this cap) |
 | `oidc-provider=*` | `radosgw_iam_openid_connect_provider` |
 | `roles=*` | `radosgw_iam_role`, `radosgw_iam_role_policy`, `radosgw_iam_roles` |
 | `metadata=*` | `radosgw_iam_users` |
 
-To grant all required capabilities to a user:
+To grant all capabilities to a user:
 
 ```bash
 radosgw-admin caps add --uid=admin --caps="accounts=*;buckets=*;metadata=*;oidc-provider=*;roles=*;users=*"
 ```
+
+~> **These capabilities authorize the Admin Ops API and are cluster-wide** (not scoped to a tenant or account). The S3 bucket sub-resources (`radosgw_s3_bucket_acl`, `radosgw_s3_bucket_policy`, `radosgw_s3_bucket_notification`, `radosgw_s3_bucket_lifecycle_configuration`, `radosgw_s3_bucket_website_configuration`) and the IAM/STS resources (`radosgw_iam_role`, `radosgw_iam_role_policy`, `radosgw_iam_openid_connect_provider`, `radosgw_sns_topic`) use the S3/IAM APIs directly and need **no** admin capability — they work with the configured user's own S3/IAM permissions.
+
+~> **Federated and account users.** A user authenticated via OpenStack Keystone, or an account root user, usually has no admin capabilities. Such users can still manage S3-based resources (for example `radosgw_s3_bucket` is created over the S3 API, with Admin-API-only metadata left `null`). Admin capabilities **can** be granted to an account user with `radosgw-admin caps add` to enable the Admin-API-backed resources — but this grants **cluster-wide** admin-ops access and is independent of the account's IAM policies (which govern that account's own S3/IAM data-plane actions).
 
 ## Example Usage
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/ceph/go-ceph/rgw/admin"
@@ -22,6 +23,37 @@ var _ resource.ResourceWithImportState = &BucketLinkResource{}
 
 func NewS3BucketLinkResource() resource.Resource {
 	return &BucketLinkResource{}
+}
+
+// bucketTenant returns the tenant component of a resolved (possibly
+// tenant-qualified "tenant$user") user ID, or "" for a non-tenant user.
+func bucketTenant(resolvedUID string) string {
+	if tenant, _, ok := splitTenantQualifiedUserID(resolvedUID); ok {
+		return tenant
+	}
+	return ""
+}
+
+// linkSourceBucket qualifies a bucket name as the source of a link to a tenant
+// user. RadosGW scopes buckets by tenant, so moving a default-namespace bucket to
+// a tenant user requires addressing it with a leading "/" (empty-tenant)
+// qualifier; otherwise RadosGW looks for the bucket inside the tenant namespace
+// and returns NoSuchKey. A name that already carries a tenant ("/") is unchanged.
+func linkSourceBucket(tenant, bucket string) string {
+	if tenant == "" || strings.Contains(bucket, "/") {
+		return bucket
+	}
+	return "/" + bucket
+}
+
+// tenantScopedBucket qualifies a bucket name for reads and unlinks against a
+// tenant user's namespace ("tenant/bucket"). A name that already carries a
+// tenant ("/") is returned unchanged.
+func tenantScopedBucket(tenant, bucket string) string {
+	if tenant == "" || strings.Contains(bucket, "/") {
+		return bucket
+	}
+	return tenant + "/" + bucket
 }
 
 // BucketLinkResource defines the resource implementation.
@@ -53,9 +85,11 @@ This resource links an existing bucket to a user, unlinking it from any previous
 
 On destruction, the bucket can optionally be linked to a different user (via ` + "`unlink_to_uid`" + `), or simply unlinked from the current user.
 
-~> **Note:** The bucket must already exist. This resource does not create buckets, only manages ownership. The ` + "`owner`" + ` attribute on ` + "`radosgw_s3_bucket`" + ` is read-only, so this resource can be used alongside it without conflicts.
+~> **Note:** The bucket must already exist. This resource does not create buckets, only manages ownership. For **same-namespace** links (the target user is in the same namespace as the bucket — i.e. no tenant, or the same tenant), the ` + "`owner`" + ` attribute on ` + "`radosgw_s3_bucket`" + ` is read-only, so the two resources can be used together without conflict. This is **not** true when linking to a *tenant* user — see the tenant note below.
 
-~> **Important:** When transferring bucket ownership, the ` + "`radosgw_s3_bucket_acl`" + ` and ` + "`radosgw_s3_bucket_policy`" + ` resources can only be managed by the bucket owner. If you transfer ownership to a different user, you will need separate provider credentials (aliases) to manage those resources.`,
+~> **Important:** When transferring bucket ownership, the ` + "`radosgw_s3_bucket_acl`" + ` and ` + "`radosgw_s3_bucket_policy`" + ` resources can only be managed by the bucket owner. If you transfer ownership to a different user, you will need separate provider credentials (aliases) to manage those resources.
+
+~> **Tenant users:** RadosGW scopes buckets by tenant. Linking a bucket to a tenant user (a ` + "`uid`" + ` of the form ` + "`tenant$user`" + `, e.g. when OpenStack Keystone ` + "`rgw_keystone_implicit_tenants`" + ` is enabled) **moves the bucket into that tenant's namespace** (it becomes ` + "`tenant/bucket`" + `). The provider handles the addressing automatically — you still reference the plain bucket name here. However, because the bucket physically moves namespaces, do **not** also manage that same bucket's lifecycle with ` + "`radosgw_s3_bucket`" + ` by its plain name (it will report drift and try to recreate it). Create such buckets out-of-band (or in the tenant) and manage only their ownership with this resource.`,
 
 		Attributes: map[string]schema.Attribute{
 			"bucket": schema.StringAttribute{
@@ -132,8 +166,12 @@ func (r *BucketLinkResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
+	// RadosGW scopes buckets by tenant. When linking to a tenant user, the
+	// source bucket (in the default namespace) must be addressed as "/bucket";
+	// otherwise RadosGW searches the tenant namespace and returns NoSuchKey.
+	tenant := bucketTenant(resolvedUID)
 	bucketLink := admin.BucketLinkInput{
-		Bucket: data.Bucket.ValueString(),
+		Bucket: linkSourceBucket(tenant, data.Bucket.ValueString()),
 		UID:    resolvedUID,
 	}
 
@@ -145,6 +183,8 @@ func (r *BucketLinkResource) Create(ctx context.Context, req resource.CreateRequ
 		"bucket":          data.Bucket.ValueString(),
 		"uid":             uid,
 		"resolved_uid":    resolvedUID,
+		"tenant":          tenant,
+		"link_source":     bucketLink.Bucket,
 		"new_bucket_name": data.NewBucketName.ValueString(),
 	})
 
@@ -160,13 +200,14 @@ func (r *BucketLinkResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	// Get bucket info to retrieve the bucket ID
+	// Get bucket info to retrieve the bucket ID. After a link to a tenant user
+	// the bucket lives in the tenant namespace, so address it as "tenant/bucket".
 	effectiveBucketName := data.Bucket.ValueString()
 	if !data.NewBucketName.IsNull() && data.NewBucketName.ValueString() != "" {
 		effectiveBucketName = data.NewBucketName.ValueString()
 	}
 
-	bucketInfo, err := r.client.Admin.GetBucketInfo(ctx, admin.Bucket{Bucket: effectiveBucketName})
+	bucketInfo, err := r.client.Admin.GetBucketInfo(ctx, admin.Bucket{Bucket: tenantScopedBucket(tenant, effectiveBucketName)})
 	if err != nil {
 		tflog.Warn(ctx, "Could not retrieve bucket info after link", map[string]any{
 			"bucket": effectiveBucketName,
@@ -233,15 +274,7 @@ func (r *BucketLinkResource) Read(ctx context.Context, req resource.ReadRequest,
 	}
 
 	// Check if bucket is in user's bucket list
-	found := false
-	for _, bucket := range buckets {
-		if bucket == effectiveBucketName {
-			found = true
-			break
-		}
-	}
-
-	if !found {
+	if !slices.Contains(buckets, effectiveBucketName) {
 		tflog.Info(ctx, "Bucket is no longer linked to user, removing from state", map[string]any{
 			"bucket": effectiveBucketName,
 			"uid":    data.UID.ValueString(),
@@ -250,8 +283,9 @@ func (r *BucketLinkResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	// Get bucket info for bucket_id
-	bucketInfo, err := r.client.Admin.GetBucketInfo(ctx, admin.Bucket{Bucket: effectiveBucketName})
+	// Get bucket info for bucket_id. For a tenant user the bucket lives in the
+	// tenant namespace, so address it as "tenant/bucket".
+	bucketInfo, err := r.client.Admin.GetBucketInfo(ctx, admin.Bucket{Bucket: tenantScopedBucket(bucketTenant(resolvedUID), effectiveBucketName)})
 	if err != nil {
 		if errors.Is(err, admin.ErrNoSuchBucket) {
 			tflog.Info(ctx, "Bucket no longer exists, removing from state")
@@ -304,44 +338,53 @@ func (r *BucketLinkResource) Delete(ctx context.Context, req resource.DeleteRequ
 		"unlink_to_uid": data.UnlinkToUID.ValueString(),
 	})
 
+	// Resolve the current owner to determine the bucket's tenant namespace.
+	resolvedUID, resolveErr := resolveUserID(ctx, r.client, data.UID.ValueString())
+	if resolveErr != nil {
+		if errors.Is(resolveErr, admin.ErrNoSuchUser) {
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error Resolving User",
+			fmt.Sprintf("Could not resolve user %s for bucket unlink: %s", data.UID.ValueString(), resolveErr.Error()),
+		)
+		return
+	}
+	currentTenant := bucketTenant(resolvedUID)
+
 	var err error
 	if !data.UnlinkToUID.IsNull() && data.UnlinkToUID.ValueString() != "" {
 		unlinkToUID := data.UnlinkToUID.ValueString()
-		resolvedUnlinkToUID, resolveErr := resolveUserID(ctx, r.client, unlinkToUID)
-		if resolveErr != nil {
-			if errors.Is(resolveErr, admin.ErrNoSuchUser) {
+		resolvedUnlinkToUID, relinkErr := resolveUserID(ctx, r.client, unlinkToUID)
+		if relinkErr != nil {
+			if errors.Is(relinkErr, admin.ErrNoSuchUser) {
 				return
 			}
 			resp.Diagnostics.AddError(
 				"Error Resolving User",
-				fmt.Sprintf("Could not resolve user %s for bucket relink: %s", unlinkToUID, resolveErr.Error()),
+				fmt.Sprintf("Could not resolve user %s for bucket relink: %s", unlinkToUID, relinkErr.Error()),
 			)
 			return
 		}
-		// Link bucket to a different user
-		err = retryOnConcurrentModification(ctx, fmt.Sprintf("LinkBucket %s to %s (on destroy)", effectiveBucketName, resolvedUnlinkToUID), func() error {
+		// Relink to a different user. Address the bucket in its current namespace:
+		// "tenant/bucket" if currently owned by a tenant user, otherwise the
+		// leading-slash form when moving a default-namespace bucket to a tenant.
+		source := tenantScopedBucket(currentTenant, effectiveBucketName)
+		if currentTenant == "" {
+			source = linkSourceBucket(bucketTenant(resolvedUnlinkToUID), effectiveBucketName)
+		}
+		err = retryOnConcurrentModification(ctx, fmt.Sprintf("LinkBucket %s to %s (on destroy)", source, resolvedUnlinkToUID), func() error {
 			return r.client.Admin.LinkBucket(ctx, admin.BucketLinkInput{
-				Bucket: effectiveBucketName,
+				Bucket: source,
 				UID:    resolvedUnlinkToUID,
 			})
 		})
 	} else {
-		uid := data.UID.ValueString()
-		resolvedUID, resolveErr := resolveUserID(ctx, r.client, uid)
-		if resolveErr != nil {
-			if errors.Is(resolveErr, admin.ErrNoSuchUser) {
-				return
-			}
-			resp.Diagnostics.AddError(
-				"Error Resolving User",
-				fmt.Sprintf("Could not resolve user %s for bucket unlink: %s", uid, resolveErr.Error()),
-			)
-			return
-		}
-		// Unlink bucket from current user
-		err = retryOnConcurrentModification(ctx, fmt.Sprintf("UnlinkBucket %s from %s", effectiveBucketName, resolvedUID), func() error {
+		// Unlink from the current user, addressing the bucket in its namespace.
+		unlinkBucketName := tenantScopedBucket(currentTenant, effectiveBucketName)
+		err = retryOnConcurrentModification(ctx, fmt.Sprintf("UnlinkBucket %s from %s", unlinkBucketName, resolvedUID), func() error {
 			return r.client.Admin.UnlinkBucket(ctx, admin.BucketLinkInput{
-				Bucket: effectiveBucketName,
+				Bucket: unlinkBucketName,
 				UID:    resolvedUID,
 			})
 		})

@@ -2,12 +2,18 @@
 subcategory: "S3 (Simple Storage)"
 page_title: "RadosGW: radosgw_s3_bucket"
 description: |-
-  Manages an S3 bucket in Ceph RadosGW. This resource creates buckets via the S3 API and manages bucket configuration through both S3 and Admin APIs.
+  Manages an S3 bucket in Ceph RadosGW. This resource creates buckets via the S3 API and enriches them with metadata from the Admin API when available.
+  ~> Users without admin capabilities (e.g. authenticated via OpenStack Keystone federation, or an account root user): bucket create/read/update/delete work over the S3 API alone, and the S3-derivable attributes (owner, creation_time, versioning) are still populated. The Admin-API-only attributes — id, marker, num_shards, index_type, placement_rule, zonegroup, explicit_placement, and bucket_quota — are null because they require the buckets capability / admin-ops access. force_destroy also falls back to emptying the bucket over S3.
+  ~> Account users: a non-root account user has no permissions by default and can only create buckets once the account root grants it an IAM policy (or role/group) allowing the S3 action; otherwise CreateBucket fails with AccessDenied. An account root user has full access to its account's resources without a policy.
 ---
 
 # radosgw_s3_bucket
 
-Manages an S3 bucket in Ceph RadosGW. This resource creates buckets via the S3 API and manages bucket configuration through both S3 and Admin APIs.
+Manages an S3 bucket in Ceph RadosGW. This resource creates buckets via the S3 API and enriches them with metadata from the Admin API when available.
+
+~> **Users without admin capabilities** (e.g. authenticated via OpenStack Keystone federation, or an account root user): bucket create/read/update/delete work over the S3 API alone, and the S3-derivable attributes (`owner`, `creation_time`, `versioning`) are still populated. The Admin-API-only attributes — `id`, `marker`, `num_shards`, `index_type`, `placement_rule`, `zonegroup`, `explicit_placement`, and `bucket_quota` — are `null` because they require the `buckets` capability / admin-ops access. `force_destroy` also falls back to emptying the bucket over S3.
+
+~> **Account users:** a non-root account user has no permissions by default and can only create buckets once the account root grants it an IAM policy (or role/group) allowing the S3 action; otherwise `CreateBucket` fails with `AccessDenied`. An account root user has full access to its account's resources without a policy.
 
 ## Example Usage
 

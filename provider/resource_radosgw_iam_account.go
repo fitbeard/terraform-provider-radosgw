@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -58,16 +58,27 @@ func (r *AccountResource) Metadata(ctx context.Context, req resource.MetadataReq
 
 func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	// limitInt64 builds the schema for the account's numeric limit attributes.
-	// They default to -1 (unlimited) so the configuration is fully declarative:
-	// omitting one, or removing a previously-set value, converges to unlimited
-	// rather than silently retaining the prior value. -1 is a version-independent
-	// sentinel that RadosGW round-trips as-is.
+	// These are Optional+Computed with no hard-coded default: when unset, the
+	// value is omitted from the API request so RadosGW applies its own default
+	// (1000 for users/roles/groups/buckets, 4 for access keys), and the
+	// resulting value is read back into state. UseStateForUnknown keeps that
+	// computed value stable across plans so unrelated changes don't re-plan it
+	// as unknown.
+	//
+	// The sign convention is NOT uniform across these limits, so no single
+	// sentinel can mean "unlimited" for all of them (see the per-attribute
+	// descriptions): for max_buckets a negative value DENIES bucket creation
+	// and 0 means unlimited, whereas for the other four a negative value means
+	// unlimited and 0 denies creation. Omitting the field sidesteps this
+	// entirely.
 	limitInt64 := func(desc string) schema.Int64Attribute {
 		return schema.Int64Attribute{
 			MarkdownDescription: desc,
 			Optional:            true,
 			Computed:            true,
-			Default:             int64default.StaticInt64(-1),
+			PlanModifiers: []planmodifier.Int64{
+				int64planmodifier.UseStateForUnknown(),
+			},
 		}
 	}
 
@@ -78,6 +89,21 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 			"account as a whole. Users are associated with an account through the " +
 			"`account_id` attribute of `radosgw_iam_user`, and one user may be marked " +
 			"as the account root via `account_root`.\n\n" +
+			"### Permissions\n\n" +
+			"The **account root** user has full access to all of the account's resources " +
+			"without any policy. Regular (non-root) account users start with **no " +
+			"permissions** — the root must grant them access through IAM identity " +
+			"policies, group membership, or assumable roles before they can, for " +
+			"example, create buckets. Permissions can be granted with inline policies or " +
+			"with AWS **managed policies**, attached by the account root via the IAM API " +
+			"(`aws iam attach-user-policy`). RadosGW provides managed policies such as " +
+			"`arn:aws:iam::aws:policy/AmazonS3FullAccess` and " +
+			"`arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess`.\n\n" +
+			"~> **Note:** These are two distinct permission systems. IAM policies (above) " +
+			"govern an account's S3/IAM data-plane actions and are account-scoped. RadosGW " +
+			"admin capabilities (`radosgw-admin caps add`) are separate, authorize the " +
+			"Admin Ops API, and are **cluster-wide**; they can be added to an account user " +
+			"but do not grant S3/IAM data-plane access.\n\n" +
 			"~> **Note:** Accounts require Ceph Squid (19.x) or later; they are not " +
 			"available on Reef (18.x).\n\n" +
 			"~> **Note:** A capability-name bug affects the account read/delete admin " +
@@ -139,11 +165,14 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"max_users":       limitInt64("The maximum number of users the account can own. Defaults to `-1` (unlimited)."),
-			"max_roles":       limitInt64("The maximum number of roles the account can own. Defaults to `-1` (unlimited)."),
-			"max_groups":      limitInt64("The maximum number of groups the account can own. Defaults to `-1` (unlimited)."),
-			"max_access_keys": limitInt64("The maximum number of access keys the account can own. Defaults to `-1` (unlimited)."),
-			"max_buckets":     limitInt64("The maximum number of buckets the account can own. Defaults to `-1` (unlimited)."),
+			"max_users":       limitInt64("The maximum number of users the account can own. If unset, RadosGW applies its default of `1000`. A negative value (e.g. `-1`) means unlimited; `0` disables user creation. A positive value caps the count."),
+			"max_roles":       limitInt64("The maximum number of roles the account can own. If unset, RadosGW applies its default of `1000`. A negative value (e.g. `-1`) means unlimited; `0` disables role creation. A positive value caps the count."),
+			"max_groups":      limitInt64("The maximum number of groups the account can own. If unset, RadosGW applies its default of `1000`. A negative value (e.g. `-1`) means unlimited; `0` disables group creation. A positive value caps the count."),
+			"max_access_keys": limitInt64("The maximum number of access keys per account user. If unset, RadosGW applies its default of `4`. A negative value (e.g. `-1`) means unlimited; `0` disables key creation. A positive value caps the count."),
+			// NOTE: max_buckets uses the OPPOSITE sign convention from the limits
+			// above (see rgw_op.cc check_owner_max_buckets: `remaining < 0` returns
+			// -EPERM, `remaining == 0` is unlimited).
+			"max_buckets": limitInt64("The maximum number of buckets the account can own. If unset, RadosGW applies its default of `1000`. **Note:** unlike the other limits, `0` means unlimited and a **negative value (e.g. `-1`) DISABLES bucket creation** (account users get `403 AccessDenied`). A positive value caps the count."),
 		},
 	}
 }
@@ -360,11 +389,12 @@ func populateAccountResourceModel(data *AccountResourceModel, account admin.Acco
 	data.MaxBuckets = int64ValueFromPtr(account.MaxBuckets)
 }
 
-// int64ValueFromPtr converts an optional API integer into a Terraform value,
-// defaulting an absent value to -1 (unlimited).
+// int64ValueFromPtr converts an optional API integer into a Terraform value.
+// RadosGW always echoes the effective limit (its own default when the field was
+// omitted), so a nil pointer is not expected; it maps to null defensively.
 func int64ValueFromPtr(v *int64) types.Int64 {
 	if v == nil {
-		return types.Int64Value(-1)
+		return types.Int64Null()
 	}
 	return types.Int64Value(*v)
 }
