@@ -6,8 +6,9 @@ description: |-
   This resource links an existing bucket to a user, unlinking it from any previous owner. It is primarily useful for:
   Transferring bucket ownership between usersMoving buckets from one tenant to anotherRenaming buckets during the link operation
   On destruction, the bucket can optionally be linked to a different user (via unlink_to_uid), or simply unlinked from the current user.
-  ~> Note: The bucket must already exist. This resource does not create buckets, only manages ownership. The owner attribute on radosgw_s3_bucket is read-only, so this resource can be used alongside it without conflicts.
+  ~> Note: The bucket must already exist. This resource does not create buckets, only manages ownership. For same-namespace links (the target user is in the same namespace as the bucket — i.e. no tenant, or the same tenant), the owner attribute on radosgw_s3_bucket is read-only, so the two resources can be used together without conflict. This is not true when linking to a tenant user — see the tenant note below.
   ~> Important: When transferring bucket ownership, the radosgw_s3_bucket_acl and radosgw_s3_bucket_policy resources can only be managed by the bucket owner. If you transfer ownership to a different user, you will need separate provider credentials (aliases) to manage those resources.
+  ~> Tenant users: RadosGW scopes buckets by tenant. Linking a bucket to a tenant user (a uid of the form tenant$user, e.g. when OpenStack Keystone rgw_keystone_implicit_tenants is enabled) moves the bucket into that tenant's namespace (it becomes tenant/bucket). The provider handles the addressing automatically — you still reference the plain bucket name here. However, because the bucket physically moves namespaces, do not also manage that same bucket's lifecycle with radosgw_s3_bucket by its plain name (it will report drift and try to recreate it). Create such buckets out-of-band (or in the tenant) and manage only their ownership with this resource.
 ---
 
 # radosgw_s3_bucket_link
@@ -21,9 +22,11 @@ This resource links an existing bucket to a user, unlinking it from any previous
 
 On destruction, the bucket can optionally be linked to a different user (via `unlink_to_uid`), or simply unlinked from the current user.
 
-~> **Note:** The bucket must already exist. This resource does not create buckets, only manages ownership. The `owner` attribute on `radosgw_s3_bucket` is read-only, so this resource can be used alongside it without conflicts.
+~> **Note:** The bucket must already exist. This resource does not create buckets, only manages ownership. For **same-namespace** links (the target user is in the same namespace as the bucket — i.e. no tenant, or the same tenant), the `owner` attribute on `radosgw_s3_bucket` is read-only, so the two resources can be used together without conflict. This is **not** true when linking to a *tenant* user — see the tenant note below.
 
 ~> **Important:** When transferring bucket ownership, the `radosgw_s3_bucket_acl` and `radosgw_s3_bucket_policy` resources can only be managed by the bucket owner. If you transfer ownership to a different user, you will need separate provider credentials (aliases) to manage those resources.
+
+~> **Tenant users:** RadosGW scopes buckets by tenant. Linking a bucket to a tenant user (a `uid` of the form `tenant$user`, e.g. when OpenStack Keystone `rgw_keystone_implicit_tenants` is enabled) **moves the bucket into that tenant's namespace** (it becomes `tenant/bucket`). The provider handles the addressing automatically — you still reference the plain bucket name here. However, because the bucket physically moves namespaces, do **not** also manage that same bucket's lifecycle with `radosgw_s3_bucket` by its plain name (it will report drift and try to recreate it). Create such buckets out-of-band (or in the tenant) and manage only their ownership with this resource.
 
 ## Example Usage
 

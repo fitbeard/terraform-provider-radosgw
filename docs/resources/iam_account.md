@@ -4,6 +4,9 @@ page_title: "RadosGW: radosgw_iam_account"
 description: |-
   Manages a RadosGW account.
   Accounts provide AWS IAM-style multi-tenancy: an account owns the users, roles, groups, and buckets created within it, and quotas apply to the account as a whole. Users are associated with an account through the account_id attribute of radosgw_iam_user, and one user may be marked as the account root via account_root.
+  Permissions
+  The account root user has full access to all of the account's resources without any policy. Regular (non-root) account users start with no permissions — the root must grant them access through IAM identity policies, group membership, or assumable roles before they can, for example, create buckets. Permissions can be granted with inline policies or with AWS managed policies, attached by the account root via the IAM API (aws iam attach-user-policy). RadosGW provides managed policies such as arn:aws:iam::aws:policy/AmazonS3FullAccess and arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess.
+  ~> Note: These are two distinct permission systems. IAM policies (above) govern an account's S3/IAM data-plane actions and are account-scoped. RadosGW admin capabilities (radosgw-admin caps add) are separate, authorize the Admin Ops API, and are cluster-wide; they can be added to an account user but do not grant S3/IAM data-plane access.
   ~> Note: Accounts require Ceph Squid (19.x) or later; they are not available on Reef (18.x).
   ~> Note: A capability-name bug affects the account read/delete admin operations on all Squid (19.2.x) releases and on Tentacle before 20.2.2: they check a mistyped account capability that cannot be granted, so a normal accounts=* user receives AccessDenied (refresh, import, and destroy fail). On those versions the provider's RadosGW user must be a system user (radosgw-admin user modify --uid=<user> --system). Ceph 20.2.2+ fixes this and works with accounts=* alone.
   ~> Note: This resource requires the accounts=* capability on the RadosGW user configured in the provider.
@@ -15,6 +18,12 @@ description: |-
 Manages a RadosGW account.
 
 Accounts provide AWS IAM-style multi-tenancy: an account owns the users, roles, groups, and buckets created within it, and quotas apply to the account as a whole. Users are associated with an account through the `account_id` attribute of `radosgw_iam_user`, and one user may be marked as the account root via `account_root`.
+
+### Permissions
+
+The **account root** user has full access to all of the account's resources without any policy. Regular (non-root) account users start with **no permissions** — the root must grant them access through IAM identity policies, group membership, or assumable roles before they can, for example, create buckets. Permissions can be granted with inline policies or with AWS **managed policies**, attached by the account root via the IAM API (`aws iam attach-user-policy`). RadosGW provides managed policies such as `arn:aws:iam::aws:policy/AmazonS3FullAccess` and `arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess`.
+
+~> **Note:** These are two distinct permission systems. IAM policies (above) govern an account's S3/IAM data-plane actions and are account-scoped. RadosGW admin capabilities (`radosgw-admin caps add`) are separate, authorize the Admin Ops API, and are **cluster-wide**; they can be added to an account user but do not grant S3/IAM data-plane access.
 
 ~> **Note:** Accounts require Ceph Squid (19.x) or later; they are not available on Reef (18.x).
 
@@ -50,11 +59,41 @@ resource "radosgw_iam_account" "team" {
 }
 
 resource "radosgw_iam_user" "team_root" {
+  # NOTE: account users' display_name must not contain spaces.
   user_id      = "team-root"
   display_name = "TeamRootUser"
   account_id   = radosgw_iam_account.team.account_id
   account_root = true
 }
+
+# Give the account root explicit credentials. The account root has full access
+# to everything inside the account, so these keys can configure a second,
+# aliased provider that manages the account's own resources (buckets, roles,
+# IAM users/policies). Non-root members instead need IAM policies granting the
+# specific actions (see the "Permissions" section of this page).
+resource "radosgw_iam_access_key" "team_root" {
+  user_id    = radosgw_iam_user.team_root.user_id
+  access_key = "TEAMROOTACCESSKEY0001"
+  secret_key = "TeamRootSecretKey0123456789012345"
+}
+
+# Example of the two-provider pattern this enables:
+#
+#   provider "radosgw" {
+#     alias      = "team"
+#     endpoint   = "http://rgw.example.com:7480"
+#     access_key = radosgw_iam_access_key.team_root.access_key
+#     secret_key = radosgw_iam_access_key.team_root.secret_key
+#   }
+#
+#   resource "radosgw_s3_bucket" "in_account" {
+#     provider   = radosgw.team
+#     bucket     = "team-data"
+#     depends_on = [radosgw_iam_access_key.team_root]
+#   }
+#
+# A provider block cannot reference computed values, so in real configurations
+# use hard-coded keys (as above) or variables.
 ```
 
 <!-- schema generated by tfplugindocs -->
@@ -69,11 +108,11 @@ The following arguments are supported:
 
 * `account_id` - (Optional) The account ID. Must be the string `RGW` followed by 17 digits. If omitted, RadosGW auto-generates one. Cannot be modified after creation.
 * `email` - (Optional) The email address associated with the account.
-* `max_access_keys` - (Optional) The maximum number of access keys the account can own. Defaults to `-1` (unlimited).
-* `max_buckets` - (Optional) The maximum number of buckets the account can own. Defaults to `-1` (unlimited).
-* `max_groups` - (Optional) The maximum number of groups the account can own. Defaults to `-1` (unlimited).
-* `max_roles` - (Optional) The maximum number of roles the account can own. Defaults to `-1` (unlimited).
-* `max_users` - (Optional) The maximum number of users the account can own. Defaults to `-1` (unlimited).
+* `max_access_keys` - (Optional) The maximum number of access keys per account user. If unset, RadosGW applies its default of `4`. A negative value (e.g. `-1`) means unlimited; `0` disables key creation. A positive value caps the count.
+* `max_buckets` - (Optional) The maximum number of buckets the account can own. If unset, RadosGW applies its default of `1000`. **Note:** unlike the other limits, `0` means unlimited and a **negative value (e.g. `-1`) DISABLES bucket creation** (account users get `403 AccessDenied`). A positive value caps the count.
+* `max_groups` - (Optional) The maximum number of groups the account can own. If unset, RadosGW applies its default of `1000`. A negative value (e.g. `-1`) means unlimited; `0` disables group creation. A positive value caps the count.
+* `max_roles` - (Optional) The maximum number of roles the account can own. If unset, RadosGW applies its default of `1000`. A negative value (e.g. `-1`) means unlimited; `0` disables role creation. A positive value caps the count.
+* `max_users` - (Optional) The maximum number of users the account can own. If unset, RadosGW applies its default of `1000`. A negative value (e.g. `-1`) means unlimited; `0` disables user creation. A positive value caps the count.
 * `tenant` - (Optional) The tenant under which the account exists. Cannot be modified after creation.
 
 

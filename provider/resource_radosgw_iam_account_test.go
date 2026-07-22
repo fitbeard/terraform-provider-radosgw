@@ -27,10 +27,11 @@ func TestAccRadosgwIAMAccount_basic(t *testing.T) {
 					testAccCheckRadosgwIAMAccountExists("radosgw_iam_account.test"),
 					resource.TestCheckResourceAttr("radosgw_iam_account.test", "account_id", accountID),
 					resource.TestCheckResourceAttr("radosgw_iam_account.test", "name", accountName),
-					// Unspecified limits default to -1 (unlimited).
-					resource.TestCheckResourceAttr("radosgw_iam_account.test", "max_buckets", "-1"),
-					resource.TestCheckResourceAttr("radosgw_iam_account.test", "max_access_keys", "-1"),
-					resource.TestCheckResourceAttr("radosgw_iam_account.test", "max_users", "-1"),
+					// Unspecified limits are omitted from the request, so RadosGW
+					// applies its own defaults (1000 for buckets/users, 4 for keys).
+					resource.TestCheckResourceAttr("radosgw_iam_account.test", "max_buckets", "1000"),
+					resource.TestCheckResourceAttr("radosgw_iam_account.test", "max_access_keys", "4"),
+					resource.TestCheckResourceAttr("radosgw_iam_account.test", "max_users", "1000"),
 				),
 			},
 			{
@@ -99,18 +100,21 @@ func TestAccRadosgwIAMAccount_withLimits(t *testing.T) {
 				),
 			},
 			{
-				// Removing the limits must revert them to the default (-1), not
-				// silently retain the previously-set values.
+				// Removing the limits from config does NOT reset them. They are
+				// Optional+Computed and retain their last-applied values: RadosGW
+				// does not revert an omitted limit, and UseStateForUnknown keeps
+				// the known value stable. This deliberately avoids ever sending a
+				// sentinel like -1 that would disable bucket creation.
 				Config: testAccRadosgwIAMAccountConfig_basic(accountID, accountName+"-renamed"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction("radosgw_iam_account.test", plancheck.ResourceActionUpdate),
+						plancheck.ExpectResourceAction("radosgw_iam_account.test", plancheck.ResourceActionNoop),
 					},
 				},
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("radosgw_iam_account.test", "max_users", "-1"),
-					resource.TestCheckResourceAttr("radosgw_iam_account.test", "max_roles", "-1"),
-					resource.TestCheckResourceAttr("radosgw_iam_account.test", "max_buckets", "-1"),
+					resource.TestCheckResourceAttr("radosgw_iam_account.test", "max_users", "200"),
+					resource.TestCheckResourceAttr("radosgw_iam_account.test", "max_roles", "50"),
+					resource.TestCheckResourceAttr("radosgw_iam_account.test", "max_buckets", "600"),
 				),
 			},
 		},
