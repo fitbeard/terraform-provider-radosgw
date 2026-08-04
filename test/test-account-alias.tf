@@ -10,10 +10,11 @@
 # Requires: Ceph 20.2.2+ (account read/delete admin ops) and accounts=* on the
 #   admin user. See test-account.tf for account resource notes.
 #
-# Note on the alias provider: its credentials are the *explicit* keys set on the
-# radosgw_iam_access_key below (a provider block cannot reference computed
-# values, so the same literals are used in both places). The in-account
-# resources depend_on that key so it exists before the alias provider is used.
+# Note on the alias provider: its credentials are the RadosGW-generated keys of
+# the radosgw_iam_access_key below, referenced directly. Those values are unknown
+# until apply, and the provider defers client creation until they are known
+# — so no hard-coded keys are needed. The in-account resources
+# depend_on the key so it exists before the alias provider is used.
 # =============================================================================
 
 resource "radosgw_iam_account" "alias_demo" {
@@ -27,19 +28,18 @@ resource "radosgw_iam_user" "alias_demo_root" {
   account_root = true
 }
 
-# Explicit keys so the alias provider can reference them at plan time.
+# RadosGW auto-generates the key pair (unknown until apply).
 resource "radosgw_iam_access_key" "alias_demo_root" {
-  user_id    = radosgw_iam_user.alias_demo_root.user_id
-  access_key = "ALIASDEMOROOTKEY0001"
-  secret_key = "aliasdemorootsecretkey00000001"
+  user_id = radosgw_iam_user.alias_demo_root.user_id
 }
 
-# Second provider, authenticated as the account root user.
+# Second provider, authenticated as the account root user. Its credentials are
+# the generated keys above — unknown at plan time, resolved at apply.
 provider "radosgw" {
   alias      = "account_root"
   endpoint   = "http://127.0.0.1:7480"
-  access_key = "ALIASDEMOROOTKEY0001"
-  secret_key = "aliasdemorootsecretkey00000001"
+  access_key = radosgw_iam_access_key.alias_demo_root.access_key
+  secret_key = radosgw_iam_access_key.alias_demo_root.secret_key
 }
 
 # Bucket created inside the account by the account root (over S3; admin-only
