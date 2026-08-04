@@ -79,7 +79,7 @@ The following attributes are exported:
 <a id="nestedatt--subusers"></a>
 ### Nested Schema for `subusers`
 
-
+Read-Only:
 
 - `access` (String) The access level: `read`, `write`, `read-write`, or `full-control`.
 - `id` (String) The full subuser ID in the format `{user_id}:{subuser_name}`.

@@ -27,6 +27,7 @@ jobs:
           go mod download
           make fmt-check
           make vet
+          bash scripts/check-docs-templates.sh
 
   unit-test:
     runs-on: ubuntu-latest
