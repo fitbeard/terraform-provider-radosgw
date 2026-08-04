@@ -11,8 +11,8 @@
       "version": "2.32.28"
     },
     "ghcr.io/devcontainers/features/go:1": {
-      "version": "1.25.8",
-      "golangciLintVersion": "2.8.0"
+      "version": "1.26.5",
+      "golangciLintVersion": "2.12.2"
     },
     "ghcr.io/devcontainers-extra/features/gh-cli:1": {
       "version": "2.96.0"
