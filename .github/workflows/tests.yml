@@ -21,6 +21,8 @@ jobs:
           go-version-file: go.mod
           cache: true
       - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
       - run: |
           go mod download
           make fmt-check
