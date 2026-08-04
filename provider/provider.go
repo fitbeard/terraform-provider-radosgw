@@ -118,6 +118,25 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
+	// Defer client creation when any provider configuration value is unknown at
+	// plan time. This happens when a value is sourced from a resource created in
+	// the same apply — e.g. an OpenStack EC2 credential or a
+	// radosgw_iam_access_key feeding an aliased provider. An unknown value reads
+	// back as an empty string via ValueString(), so without this guard the
+	// required-field checks below would wrongly report it as "missing". Returning
+	// without configuring lets the plan proceed (resources depending on this
+	// provider defer to apply); Terraform re-invokes Configure at apply once the
+	// values are known.
+	if config.Endpoint.IsUnknown() ||
+		config.AccessKey.IsUnknown() ||
+		config.SecretKey.IsUnknown() ||
+		config.TLSInsecureSkipVerify.IsUnknown() ||
+		config.RootCACertificate.IsUnknown() ||
+		config.RootCACertificateFile.IsUnknown() {
+		tflog.Debug(ctx, "Deferring RadosGW client creation: provider configuration has unknown values at plan time")
+		return
+	}
+
 	// Check environment variables
 	endpoint := os.Getenv("RADOSGW_ENDPOINT")
 	accessKey := os.Getenv("RADOSGW_ACCESS_KEY")
