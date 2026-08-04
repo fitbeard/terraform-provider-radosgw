@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/ceph/go-ceph/rgw/admin"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
@@ -126,6 +127,70 @@ func TestAccRadosgwS3BucketLink_tenantUser(t *testing.T) {
 			},
 		},
 	})
+}
+
+// TestAccRadosgwS3BucketLink_tenantOwnedBucket:
+// linking a bucket that already lives in a TENANT namespace — because it was
+// created by the tenant user over S3 (e.g. a Keystone implicit-tenant user).
+// The provider addresses the source bucket in the
+// tenant namespace (with a default-namespace fallback), and the read compares the
+// bare bucket name so the link is idempotent.
+func TestAccRadosgwS3BucketLink_tenantOwnedBucket(t *testing.T) {
+	t.Parallel()
+
+	bucketName := randomName("tf-acc-bucket")
+	uid := strings.ReplaceAll(randomName("tfaccten"), "-", "")
+	tenant := strings.ReplaceAll(randomName("tftenant"), "-", "")
+	accessKey := strings.ReplaceAll(randomName("tenownak"), "-", "")
+	secretKey := strings.ReplaceAll(randomName("tenownsk"), "-", "")
+	qualifiedUID := tenant + "$" + uid
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(_ *terraform.State) error {
+			// unlink_to_uid returns the bucket to admin (default namespace) on destroy.
+			_, _ = testAccS3Client().DeleteBucket(testCtx, &s3.DeleteBucketInput{Bucket: aws.String(bucketName)})
+			_ = testAccAdminClient.RemoveUser(testCtx, admin.User{ID: qualifiedUID})
+			return nil
+		},
+		Steps: []resource.TestStep{
+			{
+				PreConfig: func() {
+					// Tenant user (Keystone implicit-tenant style), created out-of-band.
+					if _, err := testAccAdminClient.CreateUser(testCtx, admin.User{ID: uid, Tenant: tenant, DisplayName: uid}); err != nil {
+						t.Fatalf("failed to create tenant user %s: %s", qualifiedUID, err)
+					}
+					gen := false
+					if _, err := testAccAdminClient.CreateKey(testCtx, admin.UserKeySpec{UID: qualifiedUID, AccessKey: accessKey, SecretKey: secretKey, GenerateKey: &gen}); err != nil {
+						t.Fatalf("failed to add key to tenant user %s: %s", qualifiedUID, err)
+					}
+					// Bucket created AS the tenant user -> lands in the tenant namespace.
+					if _, err := testAccS3ClientWithCreds(accessKey, secretKey).CreateBucket(testCtx, &s3.CreateBucketInput{Bucket: aws.String(bucketName)}); err != nil {
+						t.Fatalf("failed to create tenant-owned bucket %s: %s", bucketName, err)
+					}
+				},
+				Config: testAccRadosgwS3BucketLinkConfig_tenantOwned(bucketName, uid),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("radosgw_s3_bucket_link.test", "bucket", bucketName),
+					resource.TestCheckResourceAttr("radosgw_s3_bucket_link.test", "uid", uid),
+					resource.TestCheckResourceAttrSet("radosgw_s3_bucket_link.test", "bucket_id"),
+				),
+			},
+		},
+	})
+}
+
+func testAccRadosgwS3BucketLinkConfig_tenantOwned(bucketName, uid string) string {
+	// No radosgw_iam_user resource: the tenant user and its tenant-namespace
+	// bucket are created out-of-band; only ownership is managed here.
+	return providerConfig() + fmt.Sprintf(`
+resource "radosgw_s3_bucket_link" "test" {
+  bucket        = %q
+  uid           = %q
+  unlink_to_uid = "admin"
+}
+`, bucketName, uid)
 }
 
 // testAccCheckBucketLinkTenantCleanup deletes the out-of-band bucket (relinked
