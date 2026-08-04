@@ -87,7 +87,7 @@ The following attributes are exported:
 <a id="nestedatt--bucket_quota"></a>
 ### Nested Schema for `bucket_quota`
 
-
+Read-Only:
 
 - `enabled` (Boolean) Whether the bucket quota is enabled.
 - `max_objects` (Number) Maximum number of objects. `-1` means unlimited.
@@ -98,7 +98,7 @@ The following attributes are exported:
 <a id="nestedatt--explicit_placement"></a>
 ### Nested Schema for `explicit_placement`
 
-
+Read-Only:
 
 - `data_extra_pool` (String) The RADOS pool for storing extra object data (e.g., multipart uploads).
 - `data_pool` (String) The RADOS pool for storing object data.

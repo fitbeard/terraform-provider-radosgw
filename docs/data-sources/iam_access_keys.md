@@ -87,7 +87,7 @@ The following attributes are exported:
 <a id="nestedatt--access_keys"></a>
 ### Nested Schema for `access_keys`
 
-
+Read-Only:
 
 - `access_key_id` (String) The access key ID. For S3 keys this is the access key. For Swift keys this is `user_id:subuser`.
 - `key_type` (String) The type of key: `s3` or `swift`.

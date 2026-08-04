@@ -84,7 +84,7 @@ The following attributes are exported:
 <a id="nestedatt--caps"></a>
 ### Nested Schema for `caps`
 
-
+Read-Only:
 
 - `perm` (String) The permission level: `*` (full access), `read`, or `write`.
 - `type` (String) The capability type (e.g., `users`, `buckets`, `metadata`, `usage`, `zone`, `info`, `accounts`, `ratelimit`, `roles`, `user-policy`, `amz-cache`, `oidc-provider`, `bilog`, `mdlog`, `datalog`).

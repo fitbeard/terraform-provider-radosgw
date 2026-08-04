@@ -244,7 +244,7 @@ Required:
 - `id` (String) Unique identifier for the rule. Maximum 255 characters.
 - `status` (String) Whether the rule is currently being applied. Valid values: `Enabled`, `Disabled`.
 
-
+Optional:
 
 - `abort_incomplete_multipart_upload` (Block List) Specifies when incomplete multipart uploads are aborted. (see [below for nested schema](#nestedblock--rule--abort_incomplete_multipart_upload))
 - `expiration` (Block List) Specifies when objects expire (are deleted). (see [below for nested schema](#nestedblock--rule--expiration))
@@ -266,7 +266,7 @@ Required:
 <a id="nestedblock--rule--expiration"></a>
 ### Nested Schema for `rule.expiration`
 
-
+Optional:
 
 - `days` (Number) Number of days after object creation when the object expires.
 - `expired_object_delete_marker` (Boolean) Whether to remove expired object delete markers. Only valid for versioned buckets.
@@ -276,7 +276,7 @@ Required:
 <a id="nestedblock--rule--filter"></a>
 ### Nested Schema for `rule.filter`
 
-
+Optional:
 
 - `and` (Block List) A logical AND to combine multiple filter conditions. Use this to apply a rule to objects that match all specified conditions. (see [below for nested schema](#nestedblock--rule--filter--and))
 - `prefix` (String) Object key prefix that identifies one or more objects to which the rule applies.
@@ -286,7 +286,7 @@ Required:
 <a id="nestedblock--rule--filter--and"></a>
 ### Nested Schema for `rule.filter.and`
 
-
+Optional:
 
 - `prefix` (String) Object key prefix.
 - `tags` (Map of String) Map of tags that objects must have to match.
@@ -311,7 +311,7 @@ Required:
 
 - `noncurrent_days` (Number) Number of days after an object becomes noncurrent when it expires.
 
-
+Optional:
 
 - `newer_noncurrent_versions` (Number) Number of noncurrent versions to retain. If specified, the rule only applies after this many noncurrent versions exist.
 
@@ -325,7 +325,7 @@ Required:
 - `noncurrent_days` (Number) Number of days after an object becomes noncurrent when the transition occurs.
 - `storage_class` (String) The storage class to transition noncurrent versions to.
 
-
+Optional:
 
 - `newer_noncurrent_versions` (Number) Number of noncurrent versions to retain before transitioning.
 

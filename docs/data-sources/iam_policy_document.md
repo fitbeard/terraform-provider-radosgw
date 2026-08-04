@@ -164,7 +164,7 @@ The following attributes are exported:
 <a id="nestedblock--statement"></a>
 ### Nested Schema for `statement`
 
-
+Optional:
 
 - `actions` (Set of String) List of actions that this statement applies to (e.g., `s3:GetObject`, `s3:*`).
 - `condition` (Block List) Condition that must be satisfied for this statement to apply. (see [below for nested schema](#nestedblock--statement--condition))

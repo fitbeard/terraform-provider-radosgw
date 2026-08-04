@@ -192,20 +192,10 @@ transform_file() {
         }
     }
 
-    # Handle nested schema section markers
-    /^Optional:$/ {
-        if (in_schema && in_nested) {
-            print ""
-            next
-        }
-    }
-
-    /^Read-Only:$/ {
-        if (in_schema && in_nested) {
-            print ""
-            next
-        }
-    }
+    # Nested schemas are left in tfplugindocs format, so their
+    # "Required:" / "Optional:" / "Read-Only:" subheaders must pass through
+    # verbatim (via the catch-all print below). Do NOT strip them here — doing so
+    # made every nested optional/read-only attribute appear under "Required:".
 
     # At end of file, make sure we printed attributes if needed
     END {

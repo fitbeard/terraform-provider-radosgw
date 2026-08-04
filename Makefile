@@ -99,11 +99,13 @@ docs: ## Generate provider documentation
 	go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-dir . --provider-name $(NAME)
 	@echo "Transforming to Argument Reference format..."
 	@./scripts/transform-docs.sh docs
+	@./scripts/check-docs-templates.sh
 	@echo "Documentation generated in docs/ directory"
 
 .PHONY: docs-validate
 docs-validate: ## Validate documentation
 	go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs validate --provider-dir . --provider-name $(NAME)
+	@./scripts/check-docs-templates.sh
 
 # =============================================================================
 # Ceph Development Cluster

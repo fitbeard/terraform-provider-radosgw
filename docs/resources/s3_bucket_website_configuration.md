@@ -144,7 +144,7 @@ Required:
 
 - `host_name` (String) Name of the host where requests are redirected.
 
-
+Optional:
 
 - `protocol` (String) Protocol to use when redirecting requests. The default is the protocol that is used in the original request. Valid values: `http`, `https`.
 
@@ -153,7 +153,7 @@ Required:
 <a id="nestedblock--routing_rule"></a>
 ### Nested Schema for `routing_rule`
 
-
+Optional:
 
 - `condition` (Block List) A condition that must be met for the specified redirect to apply. (see [below for nested schema](#nestedblock--routing_rule--condition))
 - `redirect` (Block List) Redirect information. You can redirect requests to another host, to another page, or with another protocol. (see [below for nested schema](#nestedblock--routing_rule--redirect))
@@ -162,7 +162,7 @@ Required:
 <a id="nestedblock--routing_rule--condition"></a>
 ### Nested Schema for `routing_rule.condition`
 
-
+Optional:
 
 - `http_error_code_returned_equals` (String) The HTTP error code when the redirect is applied. If specified with `key_prefix_equals`, then both conditions must be true for the redirect to be applied.
 - `key_prefix_equals` (String) The object key name prefix when the redirect is applied. If specified with `http_error_code_returned_equals`, then both conditions must be true for the redirect to be applied.
@@ -172,7 +172,7 @@ Required:
 <a id="nestedblock--routing_rule--redirect"></a>
 ### Nested Schema for `routing_rule.redirect`
 
-
+Optional:
 
 - `host_name` (String) The host name to use in the redirect request.
 - `http_redirect_code` (String) The HTTP redirect code to use on the response.

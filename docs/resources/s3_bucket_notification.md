@@ -125,7 +125,7 @@ Required:
   - `s3:ObjectRestore:*` — object restore events
 - `topic_arn` (String) The ARN of the SNS topic to publish notifications to. The topic must already exist.
 
-
+Optional:
 
 - `filter_prefix` (String) Object key name prefix to filter notifications. Only events for objects whose keys start with this prefix will trigger a notification.
 - `filter_suffix` (String) Object key name suffix to filter notifications. Only events for objects whose keys end with this suffix will trigger a notification.
