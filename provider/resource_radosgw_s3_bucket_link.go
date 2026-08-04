@@ -89,7 +89,7 @@ On destruction, the bucket can optionally be linked to a different user (via ` +
 
 ~> **Important:** When transferring bucket ownership, the ` + "`radosgw_s3_bucket_acl`" + ` and ` + "`radosgw_s3_bucket_policy`" + ` resources can only be managed by the bucket owner. If you transfer ownership to a different user, you will need separate provider credentials (aliases) to manage those resources.
 
-~> **Tenant users:** RadosGW scopes buckets by tenant. Linking a bucket to a tenant user (a ` + "`uid`" + ` of the form ` + "`tenant$user`" + `, e.g. when OpenStack Keystone ` + "`rgw_keystone_implicit_tenants`" + ` is enabled) **moves the bucket into that tenant's namespace** (it becomes ` + "`tenant/bucket`" + `). The provider handles the addressing automatically — you still reference the plain bucket name here. However, because the bucket physically moves namespaces, do **not** also manage that same bucket's lifecycle with ` + "`radosgw_s3_bucket`" + ` by its plain name (it will report drift and try to recreate it). Create such buckets out-of-band (or in the tenant) and manage only their ownership with this resource.`,
+~> **Tenant users:** RadosGW scopes buckets by tenant. Linking a bucket to a tenant user (a ` + "`uid`" + ` of the form ` + "`tenant$user`" + `, e.g. when OpenStack Keystone ` + "`rgw_keystone_implicit_tenants`" + ` is enabled) results in the bucket living in that tenant's namespace (` + "`tenant/bucket`" + `). The provider handles the addressing automatically for a plain ` + "`bucket`" + ` name whether the source bucket currently lives in the default namespace or already in the tenant's namespace (for example because it was created by the tenant/Keystone user over S3). You may also give an explicit ` + "`tenant/bucket`" + ` value if the source is in a different tenant. However, because a linked bucket physically lives in the tenant namespace, do **not** also manage that same bucket's lifecycle with ` + "`radosgw_s3_bucket`" + ` by its plain name (it will report drift and try to recreate it). Create such buckets out-of-band (or in the tenant) and manage only their ownership with this resource.`,
 
 		Attributes: map[string]schema.Attribute{
 			"bucket": schema.StringAttribute{
@@ -166,32 +166,44 @@ func (r *BucketLinkResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	// RadosGW scopes buckets by tenant. When linking to a tenant user, the
-	// source bucket (in the default namespace) must be addressed as "/bucket";
-	// otherwise RadosGW searches the tenant namespace and returns NoSuchKey.
+	// RadosGW scopes buckets by tenant, so the source bucket must be addressed in
+	// its CURRENT namespace. We can't tell from the name alone whether the bucket
+	// lives in the default namespace ("/bucket") or already in the target tenant's
+	// namespace ("tenant/bucket" — e.g. it was created by a tenant/Keystone user
+	// over S3). Try the default-namespace form first, then fall back to the
+	// tenant-scoped form on NoSuchKey/NoSuchBucket. An explicit "tenant/bucket"
+	// value (containing "/") is used as-is with no fallback.
 	tenant := bucketTenant(resolvedUID)
-	bucketLink := admin.BucketLinkInput{
-		Bucket: linkSourceBucket(tenant, data.Bucket.ValueString()),
-		UID:    resolvedUID,
+	sources := []string{linkSourceBucket(tenant, data.Bucket.ValueString())}
+	if tenant != "" && !strings.Contains(data.Bucket.ValueString(), "/") {
+		sources = append(sources, tenantScopedBucket(tenant, data.Bucket.ValueString()))
 	}
 
-	if !data.NewBucketName.IsNull() && data.NewBucketName.ValueString() != "" {
-		bucketLink.NewBucketName = data.NewBucketName.ValueString()
+	for _, source := range sources {
+		bucketLink := admin.BucketLinkInput{Bucket: source, UID: resolvedUID}
+		if !data.NewBucketName.IsNull() && data.NewBucketName.ValueString() != "" {
+			bucketLink.NewBucketName = data.NewBucketName.ValueString()
+		}
+
+		tflog.Debug(ctx, "Linking bucket to user", map[string]any{
+			"bucket":          data.Bucket.ValueString(),
+			"uid":             uid,
+			"resolved_uid":    resolvedUID,
+			"tenant":          tenant,
+			"link_source":     source,
+			"new_bucket_name": data.NewBucketName.ValueString(),
+		})
+
+		// Link bucket with retry logic for ConcurrentModification
+		err = retryOnConcurrentModification(ctx, fmt.Sprintf("LinkBucket %s to %s", source, resolvedUID), func() error {
+			return r.client.Admin.LinkBucket(ctx, bucketLink)
+		})
+		// Success, or a non-"not found" error: stop. Otherwise try the next
+		// candidate source namespace.
+		if err == nil || (!errors.Is(err, admin.ErrNoSuchKey) && !errors.Is(err, admin.ErrNoSuchBucket)) {
+			break
+		}
 	}
-
-	tflog.Debug(ctx, "Linking bucket to user", map[string]any{
-		"bucket":          data.Bucket.ValueString(),
-		"uid":             uid,
-		"resolved_uid":    resolvedUID,
-		"tenant":          tenant,
-		"link_source":     bucketLink.Bucket,
-		"new_bucket_name": data.NewBucketName.ValueString(),
-	})
-
-	// Link bucket with retry logic for ConcurrentModification
-	err = retryOnConcurrentModification(ctx, fmt.Sprintf("LinkBucket %s to %s", data.Bucket.ValueString(), resolvedUID), func() error {
-		return r.client.Admin.LinkBucket(ctx, bucketLink)
-	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Linking Bucket",
@@ -273,8 +285,17 @@ func (r *BucketLinkResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
+	// ListUsersBuckets returns bare bucket names (no tenant prefix), so compare
+	// against the bare name even when the configured/stored value is
+	// tenant-qualified ("tenant/bucket"). Otherwise the link would be seen as
+	// missing and dropped from state, causing perpetual re-create drift.
+	bareBucketName := effectiveBucketName
+	if i := strings.LastIndex(bareBucketName, "/"); i >= 0 {
+		bareBucketName = bareBucketName[i+1:]
+	}
+
 	// Check if bucket is in user's bucket list
-	if !slices.Contains(buckets, effectiveBucketName) {
+	if !slices.Contains(buckets, bareBucketName) {
 		tflog.Info(ctx, "Bucket is no longer linked to user, removing from state", map[string]any{
 			"bucket": effectiveBucketName,
 			"uid":    data.UID.ValueString(),
