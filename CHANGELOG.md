@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.5.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.4.2...v1.5.0) (2026-08-04)
+
+
+### Features
+
+* accept provider credentials unknown until apply ([#103](https://github.com/fitbeard/terraform-provider-radosgw/issues/103)) ([fde4cf5](https://github.com/fitbeard/terraform-provider-radosgw/commit/fde4cf5bc6f5480743f146e031d4c04e6d888554))
+* add radosgw_s3_bucket_cors_configuration resource ([#106](https://github.com/fitbeard/terraform-provider-radosgw/issues/106)) ([c539372](https://github.com/fitbeard/terraform-provider-radosgw/commit/c539372e64d1d9c0d2802ef685054df11cbefdf2))
+* move to golang 1.26 ([#104](https://github.com/fitbeard/terraform-provider-radosgw/issues/104)) ([7b1b914](https://github.com/fitbeard/terraform-provider-radosgw/commit/7b1b9140c6929c3067c2965e84da6bc20dcf23d8))
+
+
+### Bug Fixes
+
+* linking for tenant owned buckets ([#105](https://github.com/fitbeard/terraform-provider-radosgw/issues/105)) ([7482722](https://github.com/fitbeard/terraform-provider-radosgw/commit/7482722ca93dc121fdf17cf57defd264e6136f6f))
+
+
+### Miscellaneous
+
+* **deps:** Bump actions/setup-go from 6 to 7 ([#95](https://github.com/fitbeard/terraform-provider-radosgw/issues/95)) ([1edd12b](https://github.com/fitbeard/terraform-provider-radosgw/commit/1edd12bc7671103b70e0dee8121af082dd6184ba))
+* **deps:** Bump github.com/aws/smithy-go from 1.27.5 to 1.27.6 ([#102](https://github.com/fitbeard/terraform-provider-radosgw/issues/102)) ([0289be6](https://github.com/fitbeard/terraform-provider-radosgw/commit/0289be6d87364793b147a26fc10e8fb987fe7a4d))
+* **deps:** Bump the aws-sdk group across 1 directory with 3 updates ([#100](https://github.com/fitbeard/terraform-provider-radosgw/issues/100)) ([f2247c2](https://github.com/fitbeard/terraform-provider-radosgw/commit/f2247c26829e91f5e626a3f38a0a41b418a225b9))
+
 ## [1.4.2](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.4.1...v1.4.2) (2026-07-22)
 
 
