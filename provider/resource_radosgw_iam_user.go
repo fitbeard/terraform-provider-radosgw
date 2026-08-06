@@ -140,10 +140,14 @@ func (r *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				},
 			},
 			"max_buckets": schema.Int64Attribute{
-				MarkdownDescription: "The maximum number of buckets the user can own. Default is 1000.",
-				Optional:            true,
-				Computed:            true,
-				Default:             int64default.StaticInt64(1000),
+				MarkdownDescription: "The maximum number of buckets the user can own. Default is 1000. " +
+					"**Not enforced for account members:** when the user belongs to an account (`account_id` is set), " +
+					"the buckets it creates are owned by the account, so RadosGW enforces the **account's** " +
+					"`max_buckets` (see `radosgw_iam_account`), not this per-user value — it is stored but has no " +
+					"effect. The same applies to the user's other quota settings for account members.",
+				Optional: true,
+				Computed: true,
+				Default:  int64default.StaticInt64(1000),
 			},
 			"suspended": schema.BoolAttribute{
 				MarkdownDescription: "Whether the user is suspended. Default is false.",

@@ -55,7 +55,7 @@ The following arguments are supported:
 * `account_root` - (Optional) Whether this user is the account root user (able to manage the account's IAM resources). Only valid together with `account_id`. Can be toggled in place without recreating the user. Defaults to `false`, so removing it from the configuration demotes a root user.
 * `default_placement` - (Optional) The default placement for the user's buckets. Note: Once set, this field cannot be cleared, only changed to a different value.
 * `email` - (Optional) The email address of the user. Note: Once set, this field cannot be cleared, only changed to a different value.
-* `max_buckets` - (Optional) The maximum number of buckets the user can own. Default is 1000.
+* `max_buckets` - (Optional) The maximum number of buckets the user can own. Default is 1000. **Not enforced for account members:** when the user belongs to an account (`account_id` is set), the buckets it creates are owned by the account, so RadosGW enforces the **account's** `max_buckets` (see `radosgw_iam_account`), not this per-user value — it is stored but has no effect. The same applies to the user's other quota settings for account members.
 * `op_mask` - (Optional) The operation mask for the user. Default is 'read, write, delete'.
 * `suspended` - (Optional) Whether the user is suspended. Default is false.
 * `tenant` - (Optional) The tenant to which the user belongs. Cannot be modified after creation. When the user belongs to an account (`account_id`), the tenant must exactly match the account's tenant — RadosGW does not inherit it, so leaving this empty for a tenanted account is rejected.

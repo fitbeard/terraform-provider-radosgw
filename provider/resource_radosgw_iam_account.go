@@ -172,7 +172,7 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 			// NOTE: max_buckets uses the OPPOSITE sign convention from the limits
 			// above (see rgw_op.cc check_owner_max_buckets: `remaining < 0` returns
 			// -EPERM, `remaining == 0` is unlimited).
-			"max_buckets": limitInt64("The maximum number of buckets the account can own. If unset, RadosGW applies its default of `1000`. **Note:** unlike the other limits, `0` means unlimited and a **negative value (e.g. `-1`) DISABLES bucket creation** (account users get `403 AccessDenied`). A positive value caps the count."),
+			"max_buckets": limitInt64("The maximum number of buckets the account can own. If unset, RadosGW applies its default of `1000`. **Note:** unlike the other limits, `0` means unlimited and a **negative value (e.g. `-1`) DISABLES bucket creation** (account users get `403 AccessDenied`). A positive value caps the count. This account-level limit governs bucket creation by **all** of the account's members (buckets are owned by the account); a member's own `radosgw_iam_user` `max_buckets` is not enforced."),
 		},
 	}
 }
