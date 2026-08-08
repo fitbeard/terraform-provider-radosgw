@@ -120,6 +120,23 @@ func iamGetUser(ctx context.Context, c *IAMClient, userName string) (iamUserXML,
 	return response.Result.User, nil
 }
 
+// iamGetGroup fetches a single IAM group via GetGroup.
+func iamGetGroup(ctx context.Context, c *IAMClient, name string) (iamGroupXML, error) {
+	params := url.Values{}
+	params.Set("Action", "GetGroup")
+	params.Set("GroupName", name)
+
+	body, err := c.DoRequest(ctx, params, "iam")
+	if err != nil {
+		return iamGroupXML{}, err
+	}
+	var response getGroupResponseXML
+	if err := xml.Unmarshal(body, &response); err != nil {
+		return iamGroupXML{}, fmt.Errorf("could not parse GetGroup response: %w", err)
+	}
+	return response.Result.Group, nil
+}
+
 // iamListUsersXML is used by the account users data source.
 type listUsersResponseXML struct {
 	XMLName xml.Name `xml:"ListUsersResponse"`
@@ -146,6 +163,89 @@ func iamListUsers(ctx context.Context, c *IAMClient, pathPrefix string) ([]iamUs
 		return nil, fmt.Errorf("could not parse ListUsers response: %w", err)
 	}
 	return response.Result.Users, nil
+}
+
+// iamListRoleAttachedPolicyARNs returns the attached (managed) policy ARNs for a role.
+func iamListRoleAttachedPolicyARNs(ctx context.Context, c *IAMClient, roleName string) ([]string, error) {
+	params := url.Values{}
+	params.Set("Action", "ListAttachedRolePolicies")
+	params.Set("RoleName", roleName)
+	body, err := c.DoRequest(ctx, params, "iam")
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		XMLName xml.Name `xml:"ListAttachedRolePoliciesResponse"`
+		Result  struct {
+			PolicyARNs []string `xml:"AttachedPolicies>member>PolicyArn"`
+		} `xml:"ListAttachedRolePoliciesResult"`
+	}
+	if err := xml.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("could not parse ListAttachedRolePolicies response: %w", err)
+	}
+	return response.Result.PolicyARNs, nil
+}
+
+// iamListGroupAttachedPolicyARNs returns the attached (managed) policy ARNs for a group.
+func iamListGroupAttachedPolicyARNs(ctx context.Context, c *IAMClient, groupName string) ([]string, error) {
+	params := url.Values{}
+	params.Set("Action", "ListAttachedGroupPolicies")
+	params.Set("GroupName", groupName)
+	body, err := c.DoRequest(ctx, params, "iam")
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		XMLName xml.Name `xml:"ListAttachedGroupPoliciesResponse"`
+		Result  struct {
+			PolicyARNs []string `xml:"AttachedPolicies>member>PolicyArn"`
+		} `xml:"ListAttachedGroupPoliciesResult"`
+	}
+	if err := xml.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("could not parse ListAttachedGroupPolicies response: %w", err)
+	}
+	return response.Result.PolicyARNs, nil
+}
+
+// iamGetGroupMembers returns the user names that are members of a group (GetGroup).
+func iamGetGroupMembers(ctx context.Context, c *IAMClient, groupName string) ([]string, error) {
+	params := url.Values{}
+	params.Set("Action", "GetGroup")
+	params.Set("GroupName", groupName)
+	body, err := c.DoRequest(ctx, params, "iam")
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		XMLName xml.Name `xml:"GetGroupResponse"`
+		Result  struct {
+			Users []string `xml:"Users>member>UserName"`
+		} `xml:"GetGroupResult"`
+	}
+	if err := xml.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("could not parse GetGroup (members) response: %w", err)
+	}
+	return response.Result.Users, nil
+}
+
+// iamAttachPolicy attaches a managed policy to an entity (Attach{User,Role,Group}Policy).
+func iamAttachPolicy(ctx context.Context, c *IAMClient, action, entityKey, entityName, policyARN string) error {
+	params := url.Values{}
+	params.Set("Action", action)
+	params.Set(entityKey, entityName)
+	params.Set("PolicyArn", policyARN)
+	_, err := c.DoRequest(ctx, params, "iam")
+	return err
+}
+
+// iamDetachPolicy detaches a managed policy from an entity (Detach{User,Role,Group}Policy).
+func iamDetachPolicy(ctx context.Context, c *IAMClient, action, entityKey, entityName, policyARN string) error {
+	params := url.Values{}
+	params.Set("Action", action)
+	params.Set(entityKey, entityName)
+	params.Set("PolicyArn", policyARN)
+	_, err := c.DoRequest(ctx, params, "iam")
+	return err
 }
 
 // newAccountIAMClient builds an IAMClient from the provider client (using the
