@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.5.0...v1.6.0) (2026-08-08)
+
+
+### Features
+
+* add resources and datasources for iam_account users and access_keys ([#109](https://github.com/fitbeard/terraform-provider-radosgw/issues/109)) ([61b62cd](https://github.com/fitbeard/terraform-provider-radosgw/commit/61b62cd760129ffe685a66df24fa89530b1ecc0a))
+* add resources for account users, groups and policies ([#110](https://github.com/fitbeard/terraform-provider-radosgw/issues/110)) ([d44c863](https://github.com/fitbeard/terraform-provider-radosgw/commit/d44c8631ee341966e92dc8d517f21c8a4b5c5075))
+
 ## [1.5.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.4.2...v1.5.0) (2026-08-04)
 
 
