@@ -26,7 +26,7 @@ Older versions may work but are not officially tested.
 ### Requirements
 
 - [Terraform](https://www.terraform.io/downloads.html) or [OpenTofu](https://opentofu.org/docs/intro/install) 1.x
-- [Go](https://golang.org/doc/install) 1.25
+- [Go](https://golang.org/doc/install) 1.26
 - Access to a Ceph cluster with RGW
 
 ### Building

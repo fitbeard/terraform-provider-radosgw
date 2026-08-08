@@ -79,7 +79,7 @@ radosgw-admin caps add --uid=admin --caps="accounts=*;buckets=*;metadata=*;oidc-
 
 ~> **Federated and account users.** A user authenticated via OpenStack Keystone, or an account root user, usually has no admin capabilities. Such users can still manage S3-based resources (for example ` + "`radosgw_s3_bucket`" + ` is created over the S3 API, with Admin-API-only metadata left ` + "`null`" + `). Admin capabilities **can** be granted to an account user with ` + "`radosgw-admin caps add`" + ` to enable the Admin-API-backed resources — but this grants **cluster-wide** admin-ops access and is independent of the account's IAM policies (which govern that account's own S3/IAM data-plane actions).
 
-~> **Managing users inside an account (least privilege).** The ` + "`radosgw_iam_account_user`" + ` and ` + "`radosgw_iam_account_access_key`" + ` resources (and the ` + "`radosgw_iam_account_user`" + `, ` + "`radosgw_iam_account_users`" + `, ` + "`radosgw_iam_account_access_keys`" + ` data sources) create users and keys **through the account's IAM API**, so an **account root user** — or any account member holding the matching IAM permission (` + "`iam:CreateUser`" + `, ` + "`iam:CreateAccessKey`" + `, …) — can manage them with **no admin capabilities at all**. Use these for least-privilege, per-account user management; use ` + "`radosgw_iam_user`" + ` (which needs the cluster-wide ` + "`users`" + ` cap) when you need full RGW user metadata — display name, email, quotas, ` + "`op_mask`" + `, suspension, caps, Swift subusers — or to create an account's **root** user.
+~> **Managing users inside an account (least privilege).** A whole family of resources manages an account's IAM entities **through the account's IAM API** — so an **account root user** (or any account member holding the matching ` + "`iam:*`" + ` permission) can use them with **no admin capabilities at all**: ` + "`radosgw_iam_account_user`" + `, ` + "`radosgw_iam_account_access_key`" + `, ` + "`radosgw_iam_account_user_policy`" + ` (inline) / ` + "`radosgw_iam_account_user_policy_attachment`" + ` (managed), ` + "`radosgw_iam_account_group`" + `, ` + "`radosgw_iam_account_group_membership`" + `, ` + "`radosgw_iam_account_group_policy`" + ` / ` + "`radosgw_iam_account_group_policy_attachment`" + `, plus the role resources ` + "`radosgw_iam_role`" + `, ` + "`radosgw_iam_role_policy`" + ` (inline) / ` + "`radosgw_iam_role_policy_attachment`" + ` (managed) and ` + "`radosgw_iam_openid_connect_provider`" + ` (which also work in the non-account/tenant context). Configure the provider (typically an aliased instance) with the account root's credentials. Use these for least-privilege, per-account management; use ` + "`radosgw_iam_user`" + ` (which needs the cluster-wide ` + "`users`" + ` cap) when you need full RGW user metadata — display name, email, quotas, ` + "`op_mask`" + `, suspension, caps, Swift subusers — or to create an account's **root** user.
 `,
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
@@ -314,6 +314,13 @@ func (p *RadosgwProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewIAMRolePolicyResource,
 		NewIAMAccountUserResource,
 		NewIAMAccountAccessKeyResource,
+		NewIAMAccountUserPolicyResource,
+		NewIAMAccountUserPolicyAttachmentResource,
+		NewIAMAccountGroupResource,
+		NewIAMAccountGroupMembershipResource,
+		NewIAMAccountGroupPolicyResource,
+		NewIAMAccountGroupPolicyAttachmentResource,
+		NewIAMRolePolicyAttachmentResource,
 		NewS3BucketLinkResource,
 		NewS3BucketResource,
 		NewS3BucketAclResource,
@@ -337,6 +344,7 @@ func (p *RadosgwProvider) DataSources(ctx context.Context) []func() datasource.D
 		NewIAMAccountUserDataSource,
 		NewIAMAccountUsersDataSource,
 		NewIAMAccountAccessKeysDataSource,
+		NewIAMAccountGroupDataSource,
 		NewIAMRoleDataSource,
 		NewIAMRolesDataSource,
 		NewIAMAccessKeysDataSource,
