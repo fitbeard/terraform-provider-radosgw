@@ -19,8 +19,9 @@
 #     aws --endpoint-url http://127.0.0.1:7480 --region default \
 #     s3api get-bucket-cors --bucket test-cors-bucket
 #
-# NOTE: this manages PER-BUCKET CORS (the S3 CORS API). RadosGW also supports a
-# GLOBAL (gateway-wide) CORS policy set on the cluster, which is NOT managed here:
+# NOTE: this manages PER-BUCKET CORS (the S3 CORS API). RadosGW release Umbrella
+# also supports a GLOBAL (gateway-wide) CORS policy set on the cluster, which is
+# NOT managed here:
 #   ceph config set client.rgw rgw_gcors_allow_origins "https://app.example.com"
 #   ceph config set client.rgw rgw_gcors_allow_methods "GET, PUT, POST"
 #   ceph config set client.rgw rgw_gcors_allow_headers "*"
