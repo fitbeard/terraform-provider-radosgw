@@ -91,13 +91,13 @@ The following attributes are exported:
 
 Required:
 
-- `allowed_methods` (List of String) Set of HTTP methods that you allow the origin to execute. Valid values: `GET`, `PUT`, `HEAD`, `POST`, `DELETE`.
-- `allowed_origins` (List of String) Set of origins you want customers to be able to access the bucket from. Use `*` to allow any origin.
+- `allowed_methods` (Set of String) Set of HTTP methods that you allow the origin to execute. Valid values: `GET`, `PUT`, `HEAD`, `POST`, `DELETE`. Order is not significant (RadosGW normalizes it).
+- `allowed_origins` (Set of String) Set of origins you want customers to be able to access the bucket from. Use `*` to allow any origin. Order is not significant (RadosGW normalizes it).
 
 Optional:
 
-- `allowed_headers` (List of String) Set of headers that are specified in the `Access-Control-Request-Headers` header. Use `*` to allow any header.
-- `expose_headers` (List of String) Set of headers in the response that you want customers to be able to access from their applications (for example, from a JavaScript `XMLHttpRequest` object).
+- `allowed_headers` (Set of String) Set of headers that are specified in the `Access-Control-Request-Headers` header. Use `*` to allow any header. Order is not significant (RadosGW normalizes it).
+- `expose_headers` (Set of String) Set of headers in the response that you want customers to be able to access from their applications (for example, from a JavaScript `XMLHttpRequest` object).
 - `id` (String) A unique identifier for the rule. The value cannot be longer than 255 characters.
 - `max_age_seconds` (Number) The time in seconds that your browser is to cache the preflight response for the specified resource.
 

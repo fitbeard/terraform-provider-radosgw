@@ -24,7 +24,7 @@ resource "radosgw_iam_user" "iamdemo_root" {
 
 resource "radosgw_iam_access_key" "iamdemo_root" {
   user_id = radosgw_iam_user.iamdemo_root.user_id
-  # auto-generated; fed to the aliased provider below (unknown until apply, #101)
+  # auto-generated; fed to the aliased provider below (unknown until apply)
 }
 
 # Provider authenticated as the account root (no admin caps).

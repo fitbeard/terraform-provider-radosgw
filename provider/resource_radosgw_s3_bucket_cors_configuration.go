@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -44,20 +45,20 @@ type S3BucketCorsConfigurationModel struct {
 
 type CorsRuleModel struct {
 	ID             types.String `tfsdk:"id"`
-	AllowedHeaders types.List   `tfsdk:"allowed_headers"`
-	AllowedMethods types.List   `tfsdk:"allowed_methods"`
-	AllowedOrigins types.List   `tfsdk:"allowed_origins"`
-	ExposeHeaders  types.List   `tfsdk:"expose_headers"`
+	AllowedHeaders types.Set    `tfsdk:"allowed_headers"`
+	AllowedMethods types.Set    `tfsdk:"allowed_methods"`
+	AllowedOrigins types.Set    `tfsdk:"allowed_origins"`
+	ExposeHeaders  types.Set    `tfsdk:"expose_headers"`
 	MaxAgeSeconds  types.Int64  `tfsdk:"max_age_seconds"`
 }
 
 func corsRuleAttrTypes() map[string]attr.Type {
 	return map[string]attr.Type{
 		"id":              types.StringType,
-		"allowed_headers": types.ListType{ElemType: types.StringType},
-		"allowed_methods": types.ListType{ElemType: types.StringType},
-		"allowed_origins": types.ListType{ElemType: types.StringType},
-		"expose_headers":  types.ListType{ElemType: types.StringType},
+		"allowed_headers": types.SetType{ElemType: types.StringType},
+		"allowed_methods": types.SetType{ElemType: types.StringType},
+		"allowed_origins": types.SetType{ElemType: types.StringType},
+		"expose_headers":  types.SetType{ElemType: types.StringType},
 		"max_age_seconds": types.Int64Type,
 	}
 }
@@ -116,31 +117,32 @@ func (r *S3BucketCorsConfigurationResource) Schema(ctx context.Context, req reso
 							MarkdownDescription: "A unique identifier for the rule. The value cannot be longer than 255 characters.",
 							Optional:            true,
 						},
-						"allowed_headers": schema.ListAttribute{
+						"allowed_headers": schema.SetAttribute{
 							MarkdownDescription: "Set of headers that are specified in the `Access-Control-Request-Headers` header. " +
-								"Use `*` to allow any header.",
+								"Use `*` to allow any header. Order is not significant (RadosGW normalizes it).",
 							Optional:    true,
 							ElementType: types.StringType,
 						},
-						"allowed_methods": schema.ListAttribute{
+						"allowed_methods": schema.SetAttribute{
 							MarkdownDescription: "Set of HTTP methods that you allow the origin to execute. " +
-								"Valid values: `GET`, `PUT`, `HEAD`, `POST`, `DELETE`.",
+								"Valid values: `GET`, `PUT`, `HEAD`, `POST`, `DELETE`. Order is not significant " +
+								"(RadosGW normalizes it).",
 							Required:    true,
 							ElementType: types.StringType,
-							Validators: []validator.List{
-								listvalidator.SizeAtLeast(1),
+							Validators: []validator.Set{
+								setvalidator.SizeAtLeast(1),
 							},
 						},
-						"allowed_origins": schema.ListAttribute{
+						"allowed_origins": schema.SetAttribute{
 							MarkdownDescription: "Set of origins you want customers to be able to access the bucket from. " +
-								"Use `*` to allow any origin.",
+								"Use `*` to allow any origin. Order is not significant (RadosGW normalizes it).",
 							Required:    true,
 							ElementType: types.StringType,
-							Validators: []validator.List{
-								listvalidator.SizeAtLeast(1),
+							Validators: []validator.Set{
+								setvalidator.SizeAtLeast(1),
 							},
 						},
-						"expose_headers": schema.ListAttribute{
+						"expose_headers": schema.SetAttribute{
 							MarkdownDescription: "Set of headers in the response that you want customers to be able to access " +
 								"from their applications (for example, from a JavaScript `XMLHttpRequest` object).",
 							Optional:    true,
@@ -333,10 +335,10 @@ func expandCorsConfiguration(ctx context.Context, model S3BucketCorsConfiguratio
 			s3Rule.ID = aws.String(rule.ID.ValueString())
 		}
 
-		s3Rule.AllowedHeaders = expandStringList(ctx, rule.AllowedHeaders, &allDiags)
-		s3Rule.AllowedMethods = expandStringList(ctx, rule.AllowedMethods, &allDiags)
-		s3Rule.AllowedOrigins = expandStringList(ctx, rule.AllowedOrigins, &allDiags)
-		s3Rule.ExposeHeaders = expandStringList(ctx, rule.ExposeHeaders, &allDiags)
+		s3Rule.AllowedHeaders = expandStringSet(ctx, rule.AllowedHeaders, &allDiags)
+		s3Rule.AllowedMethods = expandStringSet(ctx, rule.AllowedMethods, &allDiags)
+		s3Rule.AllowedOrigins = expandStringSet(ctx, rule.AllowedOrigins, &allDiags)
+		s3Rule.ExposeHeaders = expandStringSet(ctx, rule.ExposeHeaders, &allDiags)
 
 		if !rule.MaxAgeSeconds.IsNull() {
 			s3Rule.MaxAgeSeconds = aws.Int32(int32(rule.MaxAgeSeconds.ValueInt64()))
@@ -348,14 +350,14 @@ func expandCorsConfiguration(ctx context.Context, model S3BucketCorsConfiguratio
 	return config, allDiags
 }
 
-// expandStringList converts a types.List of strings to a []string, or nil when
-// the list is null/unknown.
-func expandStringList(ctx context.Context, list types.List, allDiags *diag.Diagnostics) []string {
-	if list.IsNull() || list.IsUnknown() {
+// expandStringSet converts a types.Set of strings to a []string, or nil when
+// the set is null/unknown.
+func expandStringSet(ctx context.Context, set types.Set, allDiags *diag.Diagnostics) []string {
+	if set.IsNull() || set.IsUnknown() {
 		return nil
 	}
 	var out []string
-	allDiags.Append(list.ElementsAs(ctx, &out, false)...)
+	allDiags.Append(set.ElementsAs(ctx, &out, false)...)
 	return out
 }
 
@@ -369,10 +371,10 @@ func flattenCorsConfiguration(ctx context.Context, output *s3.GetBucketCorsOutpu
 	ruleModels := make([]CorsRuleModel, 0, len(output.CORSRules))
 	for _, rule := range output.CORSRules {
 		m := CorsRuleModel{
-			AllowedHeaders: flattenStringList(ctx, rule.AllowedHeaders, &allDiags),
-			AllowedMethods: flattenStringList(ctx, rule.AllowedMethods, &allDiags),
-			AllowedOrigins: flattenStringList(ctx, rule.AllowedOrigins, &allDiags),
-			ExposeHeaders:  flattenStringList(ctx, rule.ExposeHeaders, &allDiags),
+			AllowedHeaders: flattenStringSet(ctx, rule.AllowedHeaders, &allDiags),
+			AllowedMethods: flattenStringSet(ctx, rule.AllowedMethods, &allDiags),
+			AllowedOrigins: flattenStringSet(ctx, rule.AllowedOrigins, &allDiags),
+			ExposeHeaders:  flattenStringSet(ctx, rule.ExposeHeaders, &allDiags),
 		}
 		if rule.ID != nil {
 			m.ID = types.StringValue(aws.ToString(rule.ID))
@@ -394,14 +396,15 @@ func flattenCorsConfiguration(ctx context.Context, output *s3.GetBucketCorsOutpu
 	return allDiags
 }
 
-// flattenStringList converts a []string from the S3 API to a types.List, mapping
-// an empty/absent slice to null (so optional lists that were not configured do
-// not show spurious drift).
-func flattenStringList(ctx context.Context, in []string, allDiags *diag.Diagnostics) types.List {
+// flattenStringSet converts a []string from the S3 API to a types.Set, mapping
+// an empty/absent slice to null (so optional sets that were not configured do
+// not show spurious drift). Using a Set makes ordering insignificant, which
+// matters because RadosGW normalizes the order of allowed methods/headers/origins.
+func flattenStringSet(ctx context.Context, in []string, allDiags *diag.Diagnostics) types.Set {
 	if len(in) == 0 {
-		return types.ListNull(types.StringType)
+		return types.SetNull(types.StringType)
 	}
-	list, diags := types.ListValueFrom(ctx, types.StringType, in)
+	set, diags := types.SetValueFrom(ctx, types.StringType, in)
 	allDiags.Append(diags...)
-	return list
+	return set
 }
