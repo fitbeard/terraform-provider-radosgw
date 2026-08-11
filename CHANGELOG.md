@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.1](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.6.0...v1.6.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* ordering for bucket cors settings ([#114](https://github.com/fitbeard/terraform-provider-radosgw/issues/114)) ([ee63f7e](https://github.com/fitbeard/terraform-provider-radosgw/commit/ee63f7e16724e938a6c5cd21cbe17572c67fbe6c))
+
+
+### Miscellaneous
+
+* **deps:** Bump github.com/hashicorp/terraform-plugin-log ([#113](https://github.com/fitbeard/terraform-provider-radosgw/issues/113)) ([bbf504a](https://github.com/fitbeard/terraform-provider-radosgw/commit/bbf504a338d31ea8f83ff1a7a220b42cf66c3d59))
+* **deps:** Bump the aws-sdk group with 3 updates ([#112](https://github.com/fitbeard/terraform-provider-radosgw/issues/112)) ([0c470e2](https://github.com/fitbeard/terraform-provider-radosgw/commit/0c470e2b95742fb891dacf71acf13edc1afedc04))
+
 ## [1.6.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.5.0...v1.6.0) (2026-08-08)
 
 
