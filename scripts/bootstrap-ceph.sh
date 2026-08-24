@@ -91,42 +91,32 @@ rgw_enable_static_website = true
 EOF
 
 # Generate keyring
+#
+# NOTE: keys are generated at runtime with ceph-authtool rather than hardcoded.
+# Ceph 20.2.4 / 19.2.6 introduced a new secure cephx key type (type 2, AES-256)
+# and, with the new default `mon_auth_allow_insecure_key = false`, the monitor
+# REJECTS the old type-1 keys for authentication (clients fail with
+# "handle_auth_bad_method ... Permission denied", so the cluster never comes up).
+# Generating keys here lets each Ceph release mint keys of a type it accepts,
+# keeping the bootstrap working across reef/squid/tentacle.
 echo "Generating keyring..."
-cat > "$CEPH_DIR/keyring" <<EOF
-[mon.]
-key = AQBDm89oNP7bAxAA6TgZ1toOkhDjUNEkRL18Gg==
-caps mon = allow *
-
-[client.admin]
-key = AQB5m89objcKIxAAda2ULz/l3NH+mv9XzKePHQ==
-caps mon = allow *
-caps mds = allow *
-caps osd = allow *
-caps mgr = allow *
-
-[mgr.mgr1]
-key = AQCDm89oNP7bAxAA6TgZ1toOkhDjUNEkRL18Gg==
-caps mon = allow *
-caps osd = allow *
-caps mds = allow *
-
-[client.rgw.rgw1]
-key = AQDRm89oNP7bAxAA6TgZ1toOkhDjUNEkRL18Gg==
-caps mon = allow rw
-caps osd = allow rwx
-caps mgr = allow rw
-EOF
+ceph-authtool --create-keyring "$CEPH_DIR/keyring" \
+    --gen-key -n mon. --cap mon 'allow *'
+ceph-authtool "$CEPH_DIR/keyring" \
+    --gen-key -n client.admin \
+    --cap mon 'allow *' --cap osd 'allow *' --cap mds 'allow *' --cap mgr 'allow *'
+ceph-authtool "$CEPH_DIR/keyring" \
+    --gen-key -n mgr.mgr1 \
+    --cap mon 'allow *' --cap osd 'allow *' --cap mds 'allow *'
+ceph-authtool "$CEPH_DIR/keyring" \
+    --gen-key -n client.rgw.rgw1 \
+    --cap mon 'allow rw' --cap osd 'allow rwx' --cap mgr 'allow rw'
 
 # Add OSD keys
 for i in $(seq 0 $((NUM_OSDS - 1))); do
-    cat >> "$CEPH_DIR/keyring" <<EOF
-
-[osd.$i]
-key = AQCzsPFolNPNNhAAkglWKcr2qZB4lCK/u9A1Zw==
-caps mon = allow profile osd
-caps mgr = allow profile osd
-caps osd = allow *
-EOF
+    ceph-authtool "$CEPH_DIR/keyring" \
+        --gen-key -n "osd.$i" \
+        --cap mon 'allow profile osd' --cap mgr 'allow profile osd' --cap osd 'allow *'
 done
 
 # Create monitor map
