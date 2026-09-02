@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func TestAccRadosgwS3BucketLifecycleConfiguration_basic(t *testing.T) {
@@ -122,6 +125,42 @@ func TestAccRadosgwS3BucketLifecycleConfiguration_update(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("radosgw_s3_bucket_lifecycle_configuration.test", "rule.0.expiration.0.days", "60"),
 				),
+			},
+		},
+	})
+}
+
+// TestAccRadosgwS3BucketLifecycleConfiguration_disappears deletes the lifecycle
+// configuration out-of-band and verifies the provider detects it during refresh
+// (Read -> NoSuchLifecycleConfiguration -> RemoveResource) and plans to recreate.
+//
+// Gated to Squid+: on Reef, DeleteBucketLifecycle returns success but
+// GetBucketLifecycleConfiguration still reports the config on the immediate
+// refresh (the delete isn't reflected synchronously), so the drift isn't
+// observable within a single test step and ExpectNonEmptyPlan sees an empty plan.
+// The other S3 sub-resources delete synchronously and keep their reef coverage.
+func TestAccRadosgwS3BucketLifecycleConfiguration_disappears(t *testing.T) {
+	t.Parallel()
+
+	bucketName := randomName("tf-acc-bucket")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t); testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccRadosgwS3BucketLifecycleConfigurationConfig_basic(bucketName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("radosgw_s3_bucket_lifecycle_configuration.test", "rule.0.expiration.0.days", "30"),
+					func(s *terraform.State) error {
+						_, err := testAccS3Client().DeleteBucketLifecycle(testCtx, &s3.DeleteBucketLifecycleInput{
+							Bucket: aws.String(bucketName),
+						})
+						return err
+					},
+				),
+				ExpectNonEmptyPlan: true,
 			},
 		},
 	})

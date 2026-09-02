@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func TestAccRadosgwS3BucketWebsiteConfiguration_basic(t *testing.T) {
@@ -194,6 +197,35 @@ func TestAccRadosgwS3BucketWebsiteConfiguration_update(t *testing.T) {
 					resource.TestCheckResourceAttr("radosgw_s3_bucket_website_configuration.test", "index_document.0.suffix", "default.html"),
 					resource.TestCheckResourceAttr("radosgw_s3_bucket_website_configuration.test", "error_document.0.key", "404.html"),
 				),
+			},
+		},
+	})
+}
+
+// TestAccRadosgwS3BucketWebsiteConfiguration_disappears deletes the website
+// configuration out-of-band and verifies the provider detects it during refresh
+// (Read -> NoSuchWebsiteConfiguration -> RemoveResource) and plans to recreate.
+func TestAccRadosgwS3BucketWebsiteConfiguration_disappears(t *testing.T) {
+	t.Parallel()
+
+	bucketName := randomName("tf-acc-bucket")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccRadosgwS3BucketWebsiteConfigurationConfig_basic(bucketName),
+				Check: resource.ComposeTestCheckFunc(
+					func(s *terraform.State) error {
+						_, err := testAccS3Client().DeleteBucketWebsite(testCtx, &s3.DeleteBucketWebsiteInput{
+							Bucket: aws.String(bucketName),
+						})
+						return err
+					},
+				),
+				ExpectNonEmptyPlan: true,
 			},
 		},
 	})
