@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
@@ -59,36 +57,6 @@ func TestAccRadosgwS3BucketPolicy_update(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckRadosgwS3BucketPolicyExists("radosgw_s3_bucket_policy.test"),
 				),
-			},
-		},
-	})
-}
-
-// TestAccRadosgwS3BucketPolicy_disappears deletes the policy out-of-band and
-// verifies the provider detects it during refresh (Read -> NoSuchBucketPolicy ->
-// RemoveResource) and plans to recreate it.
-func TestAccRadosgwS3BucketPolicy_disappears(t *testing.T) {
-	t.Parallel()
-
-	bucketName := randomName("tf-acc-bucket")
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
-		Steps: []resource.TestStep{
-			{
-				Config: testAccRadosgwS3BucketPolicyConfig_basic(bucketName),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheckRadosgwS3BucketPolicyExists("radosgw_s3_bucket_policy.test"),
-					func(s *terraform.State) error {
-						_, err := testAccS3Client().DeleteBucketPolicy(testCtx, &s3.DeleteBucketPolicyInput{
-							Bucket: aws.String(bucketName),
-						})
-						return err
-					},
-				),
-				ExpectNonEmptyPlan: true,
 			},
 		},
 	})

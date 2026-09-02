@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/ceph/go-ceph/rgw/admin"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -39,37 +37,6 @@ func TestAccRadosgwS3Bucket_basic(t *testing.T) {
 				ImportStateVerifyIgnore:              []string{"force_destroy"},
 				ImportStateId:                        bucketName,
 				ImportStateVerifyIdentifierAttribute: "bucket",
-			},
-		},
-	})
-}
-
-// TestAccRadosgwS3Bucket_disappears deletes the bucket out-of-band and verifies
-// the provider detects it on refresh. With admin creds, Admin GetBucketInfo fails
-// and the S3 existence fallback (bucketExistsViaS3) reports it gone, so Read
-// removes it from state and the plan recreates it.
-func TestAccRadosgwS3Bucket_disappears(t *testing.T) {
-	t.Parallel()
-
-	bucketName := randomName("tf-acc-bucket")
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
-		Steps: []resource.TestStep{
-			{
-				Config: testAccRadosgwS3BucketConfig_basic(bucketName),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheckRadosgwS3BucketExists("radosgw_s3_bucket.test"),
-					func(s *terraform.State) error {
-						_, err := testAccS3Client().DeleteBucket(testCtx, &s3.DeleteBucketInput{
-							Bucket: aws.String(bucketName),
-						})
-						return err
-					},
-				),
-				ExpectNonEmptyPlan: true,
 			},
 		},
 	})

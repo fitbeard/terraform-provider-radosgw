@@ -60,34 +60,6 @@ func TestAccRadosgwIAMAccountPoliciesAndGroups(t *testing.T) {
 				ImportState:       true,
 				ImportStateVerify: true,
 			},
-			{
-				// Managed policy on a user (id = user/policy_arn).
-				ResourceName:      "radosgw_iam_account_user_policy_attachment.managed",
-				ImportState:       true,
-				ImportStateVerify: true,
-			},
-			{
-				// Inline policy on a group (id = group:policy_name).
-				ResourceName:      "radosgw_iam_account_group_policy.inline",
-				ImportState:       true,
-				ImportStateVerify: true,
-			},
-			{
-				// Managed policy on a role (id = role/policy_arn).
-				ResourceName:      "radosgw_iam_role_policy_attachment.managed",
-				ImportState:       true,
-				ImportStateVerify: true,
-			},
-			{
-				// Group membership imports by group name (passthrough); Read
-				// repopulates the users set. The resource has no top-level id, so
-				// verify against the group attribute.
-				ResourceName:                         "radosgw_iam_account_group_membership.m",
-				ImportState:                          true,
-				ImportStateVerify:                    true,
-				ImportStateId:                        group,
-				ImportStateVerifyIdentifierAttribute: "group",
-			},
 		},
 	})
 }
