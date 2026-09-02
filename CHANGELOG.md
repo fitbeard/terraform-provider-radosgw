@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.2](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.6.1...v1.6.2) (2026-09-02)
+
+
+### Bug Fixes
+
+* bucket versioning check during planning ([#125](https://github.com/fitbeard/terraform-provider-radosgw/issues/125)) ([4dae3b7](https://github.com/fitbeard/terraform-provider-radosgw/commit/4dae3b7a0190509a2e9b5c9d440932339fbcbc17))
+
+
+### Miscellaneous
+
+* **deps:** Bump github.com/ceph/go-ceph from 0.40.0 to 0.41.0 ([#117](https://github.com/fitbeard/terraform-provider-radosgw/issues/117)) ([b38bd0d](https://github.com/fitbeard/terraform-provider-radosgw/commit/b38bd0d8edc7f3c05526053e17e24a5e84a47a16))
+* **deps:** Bump google.golang.org/grpc from 1.82.1 to 1.83.1 ([#124](https://github.com/fitbeard/terraform-provider-radosgw/issues/124)) ([46bf93a](https://github.com/fitbeard/terraform-provider-radosgw/commit/46bf93a368ae34eed67ff5fa1975be8093d67d51))
+* **deps:** Bump the aws-sdk group across 1 directory with 3 updates ([#116](https://github.com/fitbeard/terraform-provider-radosgw/issues/116)) ([3db9021](https://github.com/fitbeard/terraform-provider-radosgw/commit/3db902144aa98328d5587368ba3691367bf15b11))
+* **deps:** Bump the aws-sdk group with 3 updates ([#122](https://github.com/fitbeard/terraform-provider-radosgw/issues/122)) ([fa9def1](https://github.com/fitbeard/terraform-provider-radosgw/commit/fa9def1bcdd4fc7dd7c25db52ba087b3d9084100))
+
 ## [1.6.1](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.6.0...v1.6.1) (2026-08-11)
 
 
