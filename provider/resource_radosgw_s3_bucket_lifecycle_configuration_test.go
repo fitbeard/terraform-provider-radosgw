@@ -133,13 +133,19 @@ func TestAccRadosgwS3BucketLifecycleConfiguration_update(t *testing.T) {
 // TestAccRadosgwS3BucketLifecycleConfiguration_disappears deletes the lifecycle
 // configuration out-of-band and verifies the provider detects it during refresh
 // (Read -> NoSuchLifecycleConfiguration -> RemoveResource) and plans to recreate.
+//
+// Gated to Squid+: on Reef, DeleteBucketLifecycle returns success but
+// GetBucketLifecycleConfiguration still reports the config on the immediate
+// refresh (the delete isn't reflected synchronously), so the drift isn't
+// observable within a single test step and ExpectNonEmptyPlan sees an empty plan.
+// The other S3 sub-resources delete synchronously and keep their reef coverage.
 func TestAccRadosgwS3BucketLifecycleConfiguration_disappears(t *testing.T) {
 	t.Parallel()
 
 	bucketName := randomName("tf-acc-bucket")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		PreCheck:                 func() { testAccPreCheck(t); testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
 		Steps: []resource.TestStep{
