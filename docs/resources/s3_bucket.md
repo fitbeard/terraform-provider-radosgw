@@ -97,7 +97,7 @@ The following arguments are supported:
 * `force_destroy` - (Optional) Whether to delete all objects in the bucket when destroying the resource. Uses the Admin API with purge-objects option. Default is false.
 * `object_lock_enabled` - (Optional) Whether S3 Object Lock is enabled for the bucket. Can only be set at creation time and cannot be modified afterwards.
 * `tenant` - (Optional) The tenant the bucket belongs to. Can only be set at creation time. When set, the bucket is created with the tenant prefix.
-* `versioning` - (Optional) The versioning state of the bucket. Valid values: 'off', 'enabled', 'suspended'. Default is 'off'.
+* `versioning` - (Optional) The versioning state of the bucket. Valid values: 'off', 'enabled', 'suspended'. Default is 'off'. **Note:** versioning is one-way — once a bucket has been set to 'enabled', RadosGW (following the S3 specification) only allows switching between 'enabled' and 'suspended'; it can never be turned back 'off'. Use 'suspended' to stop creating new object versions.
 
 
 

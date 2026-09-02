@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -85,6 +86,50 @@ func TestAccRadosgwS3Bucket_versioning(t *testing.T) {
 					testAccCheckRadosgwS3BucketExists("radosgw_s3_bucket.test"),
 					resource.TestCheckResourceAttr("radosgw_s3_bucket.test", "versioning", "suspended"),
 				),
+			},
+		},
+	})
+}
+
+// TestAccRadosgwS3Bucket_versioningCannotDisable verifies that trying to turn
+// versioning back "off" once it has been enabled fails at PLAN time with a clear,
+// actionable error — instead of a generic post-apply "inconsistent result"
+// provider bug.
+func TestAccRadosgwS3Bucket_versioningCannotDisable(t *testing.T) {
+	t.Parallel()
+
+	bucketName := randomName("tf-acc-bucket")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
+		Steps: []resource.TestStep{
+			{
+				// Enable versioning.
+				Config: testAccRadosgwS3BucketConfig_versioning(bucketName, "enabled"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("radosgw_s3_bucket.test", "versioning", "enabled"),
+				),
+			},
+			{
+				// enabled -> off must be rejected during plan.
+				Config:      testAccRadosgwS3BucketConfig_versioning(bucketName, "off"),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`Cannot Disable Bucket Versioning`),
+			},
+			{
+				// enabled -> suspended is the supported way to stop versioning.
+				Config: testAccRadosgwS3BucketConfig_versioning(bucketName, "suspended"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("radosgw_s3_bucket.test", "versioning", "suspended"),
+				),
+			},
+			{
+				// suspended -> off is likewise rejected (still a one-way constraint).
+				Config:      testAccRadosgwS3BucketConfig_versioning(bucketName, "off"),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`Cannot Disable Bucket Versioning`),
 			},
 		},
 	})

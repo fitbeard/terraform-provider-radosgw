@@ -29,6 +29,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &BucketResource{}
 var _ resource.ResourceWithImportState = &BucketResource{}
+var _ resource.ResourceWithModifyPlan = &BucketResource{}
 
 func NewS3BucketResource() resource.Resource {
 	return &BucketResource{}
@@ -131,10 +132,13 @@ func (r *BucketResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				},
 			},
 			"versioning": schema.StringAttribute{
-				MarkdownDescription: "The versioning state of the bucket. Valid values: 'off', 'enabled', 'suspended'. Default is 'off'.",
-				Optional:            true,
-				Computed:            true,
-				Default:             stringdefault.StaticString("off"),
+				MarkdownDescription: "The versioning state of the bucket. Valid values: 'off', 'enabled', 'suspended'. Default is 'off'. " +
+					"**Note:** versioning is one-way — once a bucket has been set to 'enabled', RadosGW (following the " +
+					"S3 specification) only allows switching between 'enabled' and 'suspended'; it can never be turned " +
+					"back 'off'. Use 'suspended' to stop creating new object versions.",
+				Optional: true,
+				Computed: true,
+				Default:  stringdefault.StaticString("off"),
 				Validators: []validator.String{
 					stringvalidator.OneOf("off", "enabled", "suspended"),
 				},
@@ -241,6 +245,40 @@ func (r *BucketResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				},
 			},
 		},
+	}
+}
+
+// ModifyPlan validates versioning transitions at plan time. Versioning is
+// one-way in S3/RadosGW: once a bucket is "enabled" it can only move between
+// "enabled" and "suspended", never back to "off". Without this check the plan
+// would show enabled -> off, the apply would silently no-op the change, and the
+// mandatory re-read would then contradict the plan — surfacing as the confusing
+// generic "Provider produced inconsistent result after apply … this is a bug in
+// the provider" error. Catching it here fails the plan with an actionable message
+// before any apply.
+func (r *BucketResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Only relevant for updates: skip create (no prior state) and destroy (no plan).
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var stateVersioning, planVersioning types.String
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("versioning"), &stateVersioning)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("versioning"), &planVersioning)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if planVersioning.ValueString() == "off" &&
+		(stateVersioning.ValueString() == "enabled" || stateVersioning.ValueString() == "suspended") {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("versioning"),
+			"Cannot Disable Bucket Versioning",
+			fmt.Sprintf("Versioning is currently %q and cannot be turned off. RadosGW (following the S3 "+
+				"specification) only allows switching between \"enabled\" and \"suspended\" once versioning has been "+
+				"enabled. To stop creating new object versions, set versioning = \"suspended\".",
+				stateVersioning.ValueString()),
+		)
 	}
 }
 
