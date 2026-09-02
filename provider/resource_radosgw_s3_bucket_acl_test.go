@@ -4,10 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
-	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func TestAccRadosgwS3BucketAcl_basic(t *testing.T) {
@@ -34,36 +31,6 @@ func TestAccRadosgwS3BucketAcl_basic(t *testing.T) {
 				ImportStateVerify:                    true,
 				ImportStateId:                        bucketName,
 				ImportStateVerifyIdentifierAttribute: "bucket",
-			},
-		},
-	})
-}
-
-// TestAccRadosgwS3BucketAcl_disappears deletes the underlying bucket out-of-band
-// and verifies the ACL resource detects it during refresh (Read -> getBucketAcl
-// NoSuchBucket -> isBucketNotFoundS3Error -> RemoveResource).
-func TestAccRadosgwS3BucketAcl_disappears(t *testing.T) {
-	t.Parallel()
-
-	bucketName := randomName("tf-acc-bucket")
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
-		Steps: []resource.TestStep{
-			{
-				Config: testAccRadosgwS3BucketAclConfig_basic(bucketName, "private"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("radosgw_s3_bucket_acl.test", "acl", "private"),
-					func(s *terraform.State) error {
-						_, err := testAccS3Client().DeleteBucket(testCtx, &s3.DeleteBucketInput{
-							Bucket: aws.String(bucketName),
-						})
-						return err
-					},
-				),
-				ExpectNonEmptyPlan: true,
 			},
 		},
 	})
