@@ -91,6 +91,36 @@ func testAccCheckS3BucketCorsRuleCount(bucket string, want int) resource.TestChe
 	}
 }
 
+// TestAccRadosgwS3BucketCorsConfiguration_disappears deletes the CORS config
+// out-of-band and verifies the provider detects it during refresh
+// (Read -> NoSuchCORSConfiguration -> RemoveResource) and plans to recreate.
+func TestAccRadosgwS3BucketCorsConfiguration_disappears(t *testing.T) {
+	t.Parallel()
+
+	bucketName := randomName("tf-acc-cors")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccS3BucketCorsConfig_basic(bucketName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckS3BucketCorsRuleCount(bucketName, 2),
+					func(s *terraform.State) error {
+						_, err := testAccS3Client().DeleteBucketCors(testCtx, &s3.DeleteBucketCorsInput{
+							Bucket: aws.String(bucketName),
+						})
+						return err
+					},
+				),
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}
+
 func testAccS3BucketCorsConfig_basic(bucket string) string {
 	return providerConfig() + fmt.Sprintf(`
 resource "radosgw_s3_bucket" "test" {
