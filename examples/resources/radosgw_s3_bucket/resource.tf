@@ -34,6 +34,18 @@ resource "radosgw_s3_bucket" "with_quota" {
   }
 }
 
+# Create a bucket with tags
+# The declared set is authoritative: tags not listed here are removed from the
+# bucket. Omit the attribute to leave tags unmanaged.
+resource "radosgw_s3_bucket" "with_tags" {
+  bucket = "my-tagged-bucket"
+
+  tags = {
+    environment = "production"
+    team        = "storage"
+  }
+}
+
 # Create a bucket for a specific tenant
 # Note: tenant cannot be changed after creation
 resource "radosgw_s3_bucket" "with_tenant" {
@@ -51,6 +63,11 @@ resource "radosgw_s3_bucket" "full_example" {
     enabled     = true
     max_size    = 53687091200 # 50 GB
     max_objects = 100000
+  }
+
+  tags = {
+    environment = "production"
+    team        = "storage"
   }
 }
 

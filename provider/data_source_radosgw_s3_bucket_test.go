@@ -113,12 +113,53 @@ func TestAccRadosgwS3BucketDataSource_withVersioning(t *testing.T) {
 	})
 }
 
+func TestAccRadosgwS3BucketDataSource_withTags(t *testing.T) {
+	t.Parallel()
+
+	bucketName := randomName("tf-acc-bucket")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccRadosgwS3BucketDataSourceConfig_tags(bucketName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("data.radosgw_s3_bucket.test", "tags.%", "2"),
+					resource.TestCheckResourceAttr("data.radosgw_s3_bucket.test", "tags.env", "prod"),
+					resource.TestCheckResourceAttr("data.radosgw_s3_bucket.test", "tags.team", "storage"),
+				),
+			},
+		},
+	})
+}
+
 // Test configurations
 
 func testAccRadosgwS3BucketDataSourceConfig_basic(bucketName string) string {
 	return providerConfig() + fmt.Sprintf(`
 resource "radosgw_s3_bucket" "test" {
   bucket = %q
+}
+
+data "radosgw_s3_bucket" "test" {
+  bucket = radosgw_s3_bucket.test.bucket
+
+  depends_on = [radosgw_s3_bucket.test]
+}
+`, bucketName)
+}
+
+func testAccRadosgwS3BucketDataSourceConfig_tags(bucketName string) string {
+	return providerConfig() + fmt.Sprintf(`
+resource "radosgw_s3_bucket" "test" {
+  bucket        = %q
+  force_destroy = true
+  tags = {
+    env  = "prod"
+    team = "storage"
+  }
 }
 
 data "radosgw_s3_bucket" "test" {

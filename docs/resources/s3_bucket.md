@@ -54,6 +54,18 @@ resource "radosgw_s3_bucket" "with_quota" {
   }
 }
 
+# Create a bucket with tags
+# The declared set is authoritative: tags not listed here are removed from the
+# bucket. Omit the attribute to leave tags unmanaged.
+resource "radosgw_s3_bucket" "with_tags" {
+  bucket = "my-tagged-bucket"
+
+  tags = {
+    environment = "production"
+    team        = "storage"
+  }
+}
+
 # Create a bucket for a specific tenant
 # Note: tenant cannot be changed after creation
 resource "radosgw_s3_bucket" "with_tenant" {
@@ -71,6 +83,11 @@ resource "radosgw_s3_bucket" "full_example" {
     enabled     = true
     max_size    = 53687091200 # 50 GB
     max_objects = 100000
+  }
+
+  tags = {
+    environment = "production"
+    team        = "storage"
   }
 }
 
@@ -96,6 +113,7 @@ The following arguments are supported:
 * `bucket_quota` - (Optional) Quota settings for this specific bucket. Managed via the Admin API. (see [below for nested schema](#nestedatt--bucket_quota))
 * `force_destroy` - (Optional) Whether to delete all objects in the bucket when destroying the resource. Uses the Admin API with purge-objects option. Default is false.
 * `object_lock_enabled` - (Optional) Whether S3 Object Lock is enabled for the bucket. Can only be set at creation time and cannot be modified afterwards.
+* `tags` - (Optional) A map of tags to assign to the bucket. The declared set is authoritative: tags present on the bucket but not in this map are removed. Omit the attribute (or set it to `null`) to leave the bucket without managed tags — any tags found on the bucket will then show as drift to be removed.
 * `tenant` - (Optional) The tenant the bucket belongs to. Can only be set at creation time. When set, the bucket is created with the tenant prefix.
 * `versioning` - (Optional) The versioning state of the bucket. Valid values: 'off', 'enabled', 'suspended'. Default is 'off'. **Note:** versioning is one-way — once a bucket has been set to 'enabled', RadosGW (following the S3 specification) only allows switching between 'enabled' and 'suspended'; it can never be turned back 'off'. Use 'suspended' to stop creating new object versions.
 
@@ -120,6 +138,7 @@ The following attributes are exported:
 * `bucket_quota` - See Argument Reference above.
 * `force_destroy` - See Argument Reference above.
 * `object_lock_enabled` - See Argument Reference above.
+* `tags` - See Argument Reference above.
 * `tenant` - See Argument Reference above.
 * `versioning` - See Argument Reference above.
 

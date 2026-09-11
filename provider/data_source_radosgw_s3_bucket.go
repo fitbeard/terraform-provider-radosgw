@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/ceph/go-ceph/rgw/admin"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -43,6 +44,7 @@ type BucketDataSourceModel struct {
 	IndexType         types.String `tfsdk:"index_type"`
 	ExplicitPlacement types.Object `tfsdk:"explicit_placement"`
 	BucketQuota       types.Object `tfsdk:"bucket_quota"`
+	Tags              types.Map    `tfsdk:"tags"`
 }
 
 func (d *BucketDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -138,6 +140,11 @@ func (d *BucketDataSource) Schema(ctx context.Context, req datasource.SchemaRequ
 					},
 				},
 			},
+			"tags": schema.MapAttribute{
+				MarkdownDescription: "The map of tags assigned to the bucket. Empty when the bucket has no tags.",
+				Computed:            true,
+				ElementType:         types.StringType,
+			},
 		},
 	}
 }
@@ -183,6 +190,7 @@ func (d *BucketDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	bucketInfo, err := d.client.Admin.GetBucketInfo(ctx, admin.Bucket{Bucket: bucketName})
 	if err == nil {
 		d.populateModelFromBucketInfo(ctx, &config, &bucketInfo)
+		config.Tags = readBucketTagsOrNull(ctx, d.client.S3, fullBucketName)
 		resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 		return
 	}
@@ -211,8 +219,20 @@ func (d *BucketDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	config.Marker = types.StringNull()
 	config.IndexType = types.StringNull()
 	config.NumShards = types.Int64Null()
+	config.Tags = readBucketTagsOrNull(ctx, d.client.S3, fullBucketName)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+}
+
+// readBucketTagsOrNull returns the bucket's tags via the S3 API, or a null map if
+// the bucket has no tags or the tag set could not be read (best-effort).
+func readBucketTagsOrNull(ctx context.Context, s3c *s3.Client, fullName string) types.Map {
+	tags, err := getBucketTags(ctx, s3c, fullName)
+	if err != nil {
+		tflog.Warn(ctx, "Could not read bucket tags", map[string]any{"bucket": fullName, "error": err.Error()})
+		return types.MapNull(types.StringType)
+	}
+	return tags
 }
 
 // populateModelFromBucketInfo updates the model with data from Admin API bucket info.
