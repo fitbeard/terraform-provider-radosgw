@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.7.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.6.2...v1.7.0) (2026-09-11)
+
+
+### Features
+
+* add tags support for radosgw_s3_bucket ([#132](https://github.com/fitbeard/terraform-provider-radosgw/issues/132)) ([f77ad5a](https://github.com/fitbeard/terraform-provider-radosgw/commit/f77ad5aec8976a65ed857be06a11bc0f7f16b17f))
+
+
+### Miscellaneous
+
+* **deps:** Bump google.golang.org/grpc from 1.83.1 to 1.83.2 ([#131](https://github.com/fitbeard/terraform-provider-radosgw/issues/131)) ([9804364](https://github.com/fitbeard/terraform-provider-radosgw/commit/9804364764c56223b9754cde1f123222fccbc48e))
+* **deps:** Bump the aws-sdk group across 1 directory with 3 updates ([#129](https://github.com/fitbeard/terraform-provider-radosgw/issues/129)) ([316ae9a](https://github.com/fitbeard/terraform-provider-radosgw/commit/316ae9a2a177357b0fa2c89d6e5ba09ca3517ed1))
+
 ## [1.6.2](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.6.1...v1.6.2) (2026-09-02)
 
 
