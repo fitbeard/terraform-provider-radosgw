@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/ceph/go-ceph/rgw/admin"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -130,6 +132,65 @@ func TestAccRadosgwS3Bucket_versioningCannotDisable(t *testing.T) {
 				Config:      testAccRadosgwS3BucketConfig_versioning(bucketName, "off"),
 				PlanOnly:    true,
 				ExpectError: regexp.MustCompile(`Cannot Disable Bucket Versioning`),
+			},
+		},
+	})
+}
+
+// TestAccRadosgwS3Bucket_tags exercises the bucket tags attribute: create with
+// tags, update (change/add/remove keys), and remove all tags by omission. Each
+// step is cross-checked against the S3 GetBucketTagging API, and idempotency is
+// asserted with an empty post-apply plan.
+func TestAccRadosgwS3Bucket_tags(t *testing.T) {
+	t.Parallel()
+
+	bucketName := randomName("tf-acc-bucket")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccRadosgwS3BucketConfig_tags(bucketName, `
+    env  = "prod"
+    team = "storage"`),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("radosgw_s3_bucket.test", "tags.%", "2"),
+					resource.TestCheckResourceAttr("radosgw_s3_bucket.test", "tags.env", "prod"),
+					resource.TestCheckResourceAttr("radosgw_s3_bucket.test", "tags.team", "storage"),
+					testAccCheckS3BucketTags(bucketName, map[string]string{"env": "prod", "team": "storage"}),
+				),
+			},
+			// Import round-trips the tags.
+			{
+				ResourceName:                         "radosgw_s3_bucket.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIgnore:              []string{"force_destroy"},
+				ImportStateId:                        bucketName,
+				ImportStateVerifyIdentifierAttribute: "bucket",
+			},
+			// Change one value, add a key, drop a key.
+			{
+				Config: testAccRadosgwS3BucketConfig_tags(bucketName, `
+    env   = "staging"
+    owner = "data-team"`),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("radosgw_s3_bucket.test", "tags.%", "2"),
+					resource.TestCheckResourceAttr("radosgw_s3_bucket.test", "tags.env", "staging"),
+					resource.TestCheckResourceAttr("radosgw_s3_bucket.test", "tags.owner", "data-team"),
+					resource.TestCheckNoResourceAttr("radosgw_s3_bucket.test", "tags.team"),
+					testAccCheckS3BucketTags(bucketName, map[string]string{"env": "staging", "owner": "data-team"}),
+				),
+			},
+			// Remove all tags by omitting the attribute.
+			{
+				Config: testAccRadosgwS3BucketConfig_forceDestroy(bucketName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr("radosgw_s3_bucket.test", "tags.%"),
+					testAccCheckS3BucketTags(bucketName, nil),
+				),
 			},
 		},
 	})
@@ -315,6 +376,45 @@ resource "radosgw_s3_bucket" "test" {
   versioning = %q
 }
 `, bucketName, versioning)
+}
+
+func testAccRadosgwS3BucketConfig_tags(bucketName, tagsBody string) string {
+	return providerConfig() + fmt.Sprintf(`
+resource "radosgw_s3_bucket" "test" {
+  bucket        = %q
+  force_destroy = true
+  tags = {%s
+  }
+}
+`, bucketName, tagsBody)
+}
+
+// testAccCheckS3BucketTags verifies via the S3 API that the bucket's tag set
+// matches want exactly. A nil/empty want asserts the bucket has no tags (RGW
+// returns NoSuchTagSet).
+func testAccCheckS3BucketTags(bucket string, want map[string]string) resource.TestCheckFunc {
+	return func(_ *terraform.State) error {
+		out, err := testAccS3Client().GetBucketTagging(testCtx, &s3.GetBucketTaggingInput{Bucket: aws.String(bucket)})
+		if err != nil {
+			if len(want) == 0 && isS3NoSuchTagSet(err) {
+				return nil
+			}
+			return fmt.Errorf("GetBucketTagging(%s): %w", bucket, err)
+		}
+		got := make(map[string]string, len(out.TagSet))
+		for _, tg := range out.TagSet {
+			got[aws.ToString(tg.Key)] = aws.ToString(tg.Value)
+		}
+		if len(got) != len(want) {
+			return fmt.Errorf("bucket %s: expected %d tags %v, got %d %v", bucket, len(want), want, len(got), got)
+		}
+		for k, v := range want {
+			if got[k] != v {
+				return fmt.Errorf("bucket %s: tag %q = %q, want %q", bucket, k, got[k], v)
+			}
+		}
+		return nil
+	}
 }
 
 func testAccRadosgwS3BucketConfig_quota(bucketName string, maxSize, maxObjects int64) string {

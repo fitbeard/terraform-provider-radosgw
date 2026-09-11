@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
@@ -51,6 +52,7 @@ type BucketResourceModel struct {
 	Versioning        types.String `tfsdk:"versioning"`
 	Acl               types.String `tfsdk:"acl"`
 	BucketQuota       types.Object `tfsdk:"bucket_quota"`
+	Tags              types.Map    `tfsdk:"tags"`
 
 	// Computed attributes from Admin API
 	ID                types.String `tfsdk:"id"`
@@ -149,6 +151,14 @@ func (r *BucketResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
+			},
+			"tags": schema.MapAttribute{
+				MarkdownDescription: "A map of tags to assign to the bucket. " +
+					"The declared set is authoritative: tags present on the bucket but not in this map are removed. " +
+					"Omit the attribute (or set it to `null`) to leave the bucket without managed tags — any tags " +
+					"found on the bucket will then show as drift to be removed.",
+				Optional:    true,
+				ElementType: types.StringType,
 			},
 			"bucket_quota": schema.SingleNestedAttribute{
 				MarkdownDescription: "Quota settings for this specific bucket. Managed via the Admin API.",
@@ -365,6 +375,17 @@ func (r *BucketResource) Create(ctx context.Context, req resource.CreateRequest,
 		}
 	}
 
+	// Set tags if specified.
+	if !data.Tags.IsNull() && !data.Tags.IsUnknown() && len(data.Tags.Elements()) > 0 {
+		if err = r.applyBucketTags(ctx, fullBucketName, data.Tags); err != nil {
+			resp.Diagnostics.AddError(
+				"Error Setting Bucket Tags",
+				fmt.Sprintf("Could not set tags on bucket %s: %s", fullBucketName, err.Error()),
+			)
+			return
+		}
+	}
+
 	// Read bucket info from Admin API to populate computed fields.
 	bucketInfo, err := r.client.Admin.GetBucketInfo(ctx, admin.Bucket{Bucket: bucketName})
 	if err != nil {
@@ -427,6 +448,7 @@ func (r *BucketResource) Read(ctx context.Context, req resource.ReadRequest, res
 	if err == nil {
 		r.populateModelFromBucketInfo(ctx, &data, &bucketInfo)
 		data.ForceDestroy = forceDestroy
+		r.refreshBucketTags(ctx, &data, fullBucketName)
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 		return
 	}
@@ -459,6 +481,7 @@ func (r *BucketResource) Read(ctx context.Context, req resource.ReadRequest, res
 	tflog.Debug(ctx, "Admin API unavailable; refreshing bucket via S3-only metadata", map[string]any{"bucket": bucketName})
 	r.populateBucketFromS3(ctx, &data, fullBucketName)
 	data.ForceDestroy = forceDestroy
+	r.refreshBucketTags(ctx, &data, fullBucketName)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -507,6 +530,18 @@ func (r *BucketResource) Update(ctx context.Context, req resource.UpdateRequest,
 			resp.Diagnostics.AddError(
 				"Error Setting Bucket Quota",
 				fmt.Sprintf("Could not set quota on bucket %s: %s", bucketName, err.Error()),
+			)
+			return
+		}
+	}
+
+	// Handle tags change (authoritative: PutBucketTagging replaces the full set,
+	// an empty/null map removes all tags via DeleteBucketTagging).
+	if !data.Tags.Equal(state.Tags) {
+		if err := r.applyBucketTags(ctx, fullBucketName, data.Tags); err != nil {
+			resp.Diagnostics.AddError(
+				"Error Setting Bucket Tags",
+				fmt.Sprintf("Could not set tags on bucket %s: %s", fullBucketName, err.Error()),
 			)
 			return
 		}
@@ -681,6 +716,83 @@ func (r *BucketResource) setBucketVersioning(ctx context.Context, bucketName, ve
 		},
 	})
 	return err
+}
+
+// applyBucketTags makes the bucket's tag set match the given map via the S3 API.
+// A non-empty map is written with PutBucketTagging (which replaces the whole set);
+// a null or empty map removes all tags with DeleteBucketTagging.
+func (r *BucketResource) applyBucketTags(ctx context.Context, fullName string, tags types.Map) error {
+	if tags.IsNull() || tags.IsUnknown() || len(tags.Elements()) == 0 {
+		_, err := r.client.S3.DeleteBucketTagging(ctx, &s3.DeleteBucketTaggingInput{Bucket: &fullName})
+		if err != nil && !isS3NoSuchTagSet(err) {
+			return err
+		}
+		return nil
+	}
+
+	var m map[string]string
+	if diags := tags.ElementsAs(ctx, &m, false); diags.HasError() {
+		return fmt.Errorf("could not parse tags")
+	}
+
+	tagSet := make([]s3types.Tag, 0, len(m))
+	for k, v := range m {
+		tagSet = append(tagSet, s3types.Tag{Key: aws.String(k), Value: aws.String(v)})
+	}
+
+	_, err := r.client.S3.PutBucketTagging(ctx, &s3.PutBucketTaggingInput{
+		Bucket:  &fullName,
+		Tagging: &s3types.Tagging{TagSet: tagSet},
+	})
+	return err
+}
+
+// refreshBucketTags updates data.Tags from the bucket's current tag set (S3 API).
+// A missing tag set maps to a null map. A hard read error is logged and the prior
+// state value is kept, so a transient S3 hiccup does not blow away tag state.
+func (r *BucketResource) refreshBucketTags(ctx context.Context, data *BucketResourceModel, fullName string) {
+	tags, err := getBucketTags(ctx, r.client.S3, fullName)
+	if err != nil {
+		tflog.Warn(ctx, "Could not read bucket tags; keeping prior state", map[string]any{
+			"bucket": fullName,
+			"error":  err.Error(),
+		})
+		return
+	}
+	data.Tags = tags
+}
+
+// getBucketTags reads a bucket's tag set via the S3 API and returns it as a map.
+// When the bucket has no tags (RGW returns NoSuchTagSet) the result is a null map.
+// Shared by the resource and the data source.
+func getBucketTags(ctx context.Context, s3c *s3.Client, fullName string) (types.Map, error) {
+	out, err := s3c.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{Bucket: &fullName})
+	if err != nil {
+		if isS3NoSuchTagSet(err) {
+			return types.MapNull(types.StringType), nil
+		}
+		return types.MapNull(types.StringType), err
+	}
+	if len(out.TagSet) == 0 {
+		return types.MapNull(types.StringType), nil
+	}
+
+	m := make(map[string]string, len(out.TagSet))
+	for _, t := range out.TagSet {
+		if t.Key != nil {
+			m[*t.Key] = aws.ToString(t.Value)
+		}
+	}
+	tagsMap, diags := types.MapValueFrom(ctx, types.StringType, m)
+	if diags.HasError() {
+		return types.MapNull(types.StringType), fmt.Errorf("could not build tags map")
+	}
+	return tagsMap, nil
+}
+
+// isS3NoSuchTagSet reports whether an S3 error means the bucket has no tag set.
+func isS3NoSuchTagSet(err error) bool {
+	return isS3ErrorCode(err, "NoSuchTagSet")
 }
 
 // setBucketQuota sets the quota on a bucket via Admin API.

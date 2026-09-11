@@ -25,6 +25,13 @@ resource "radosgw_s3_bucket" "test_force_destroy" {
     max_size    = 10737418240 # 10 GB in bytes
     max_objects = 10000
   }
+
+  # Bucket tags. The declared set is authoritative — tags not listed here are
+  # removed from the bucket.
+  tags = {
+    environment = "test"
+    team        = "storage"
+  }
 }
 
 # =============================================================================
@@ -49,4 +56,8 @@ output "force_destroy_bucket_id" {
 
 output "force_destroy_bucket_quota" {
   value = radosgw_s3_bucket.test_force_destroy.bucket_quota
+}
+
+output "force_destroy_bucket_tags" {
+  value = radosgw_s3_bucket.test_force_destroy.tags
 }

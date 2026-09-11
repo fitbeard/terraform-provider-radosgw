@@ -40,6 +40,10 @@ output "bucket_quota_info" {
   value = data.radosgw_s3_bucket.test.bucket_quota
 }
 
+output "bucket_tags" {
+  value = data.radosgw_s3_bucket.test.tags
+}
+
 output "bucket_zonegroup" {
   value = data.radosgw_s3_bucket.test.zonegroup
 }

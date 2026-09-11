@@ -79,6 +79,7 @@ The following attributes are exported:
 * `object_lock_enabled` - Whether S3 Object Lock is enabled for the bucket.
 * `owner` - The user ID of the bucket owner.
 * `placement_rule` - The placement rule for the bucket, determining which pools store the bucket's data.
+* `tags` - The map of tags assigned to the bucket. Empty when the bucket has no tags.
 * `tenant` - The tenant the bucket belongs to.
 * `versioning` - The versioning state of the bucket: `off`, `enabled`, or `suspended`.
 * `zonegroup` - The zonegroup ID where the bucket is located.
