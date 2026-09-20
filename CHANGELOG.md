@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.7.0...v1.7.1) (2026-09-20)
+
+
+### Miscellaneous
+
+* **test:** switch CEPH_RELEASE pinning to a specific version ([#135](https://github.com/fitbeard/terraform-provider-radosgw/issues/135)) ([6de8397](https://github.com/fitbeard/terraform-provider-radosgw/commit/6de83977a68e2ac19f8975e8df6225c202256e2a))
+
 ## [1.7.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.6.2...v1.7.0) (2026-09-11)
 
 
