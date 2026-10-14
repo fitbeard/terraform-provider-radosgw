@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.7.1](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.7.0...v1.7.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* bucket import without admin-only caps ([#139](https://github.com/fitbeard/terraform-provider-radosgw/issues/139)) ([6d84b99](https://github.com/fitbeard/terraform-provider-radosgw/commit/6d84b9953eb59d0219f2a01e5a83346b0febd253))
+
+
+### Miscellaneous
+
+* **deps:** Bump github.com/aws/smithy-go from 1.28.1 to 1.28.5 ([#137](https://github.com/fitbeard/terraform-provider-radosgw/issues/137)) ([a23e048](https://github.com/fitbeard/terraform-provider-radosgw/commit/a23e04848ccc74232380a73f723c314e705d8204))
+* **deps:** Bump the aws-sdk group across 1 directory with 3 updates ([#134](https://github.com/fitbeard/terraform-provider-radosgw/issues/134)) ([a36d4c3](https://github.com/fitbeard/terraform-provider-radosgw/commit/a36d4c347aa2fec42c5030184ec2c81d1fe3655c))
+* **test:** switch CEPH_RELEASE pinning to a specific version ([#135](https://github.com/fitbeard/terraform-provider-radosgw/issues/135)) ([6de8397](https://github.com/fitbeard/terraform-provider-radosgw/commit/6de83977a68e2ac19f8975e8df6225c202256e2a))
+
 ## [1.7.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.6.2...v1.7.0) (2026-09-11)
 
 
