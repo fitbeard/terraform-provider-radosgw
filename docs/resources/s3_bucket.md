@@ -167,9 +167,36 @@ Read-Only:
 Import is supported using the following syntax:
 
 ```shell
-# Import a bucket by name
+# The import ID is the bucket name.
+
+# Import a bucket (provider configured with admin credentials — full attribute set).
 terraform import radosgw_s3_bucket.example "my-bucket-name"
 
-# Import a bucket with special characters in the name
+# Import a bucket with special characters in the name.
 terraform import radosgw_s3_bucket.logs "my-app-logs-2024"
+
+# Import as the bucket owner, without admin capabilities (over the S3 API).
+# S3-derivable attributes are populated; admin-only attributes import as null.
+# Do not declare admin-only settings such as bucket_quota in a config you manage
+# with non-admin credentials — see the note below.
+terraform import radosgw_s3_bucket.owned "my-bucket-name"
 ```
+
+The import ID is the bucket name. Importing works with **either** admin credentials
+(the `buckets` capability) **or** the bucket owner's plain S3 keypair.
+
+~> **Importing without admin capabilities.** When the provider is configured with a
+non-admin keypair (e.g. the bucket owner, an account-root user, or a Keystone-federated
+user), the bucket is imported over the S3 API. The S3-derivable attributes (`owner`,
+`creation_time`, `versioning`, `tags`, `object_lock_enabled`) are populated, but the
+admin-only attributes — `id`, `marker`, `num_shards`, `index_type`, `placement_rule`,
+`zonegroup`, `explicit_placement`, and `bucket_quota` — are imported as `null` because
+they require admin access. The first five are read-only, so a `null` value is harmless.
+However, **do not declare admin-only *settings* (such as `bucket_quota`) in a
+configuration you manage with non-admin credentials** — a non-admin user cannot change
+them, so the apply will fail with `AccessDenied`. To manage those, import and apply with
+admin credentials instead.
+
+~> **Tenant buckets.** The import ID carries only the bucket name, so `tenant` defaults
+to `""` (the caller's own namespace). Buckets created under an explicit tenant are not
+addressable by bare name and cannot be imported this way today.
