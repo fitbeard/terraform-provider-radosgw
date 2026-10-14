@@ -673,28 +673,90 @@ func (r *BucketResource) ImportState(ctx context.Context, req resource.ImportSta
 		"bucket": bucketName,
 	})
 
-	// Verify bucket exists using Admin API
+	// Prefer the Admin API (richest metadata). Backward compatible: users with
+	// the buckets cap get the exact same import behaviour as before.
 	bucketInfo, err := r.client.Admin.GetBucketInfo(ctx, admin.Bucket{Bucket: bucketName})
-	if err != nil {
-		if isBucketNotFoundError(err) {
-			resp.Diagnostics.AddError(
-				"Bucket Not Found",
-				fmt.Sprintf("Bucket %s does not exist.", bucketName),
-			)
-			return
-		}
+	if err == nil {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("bucket"), bucketName)...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("force_destroy"), false)...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("object_lock_enabled"), bucketInfo.ObjectLockEnabled)...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tenant"), bucketInfo.Tenant)...)
+		return
+	}
+	if isBucketNotFoundError(err) {
 		resp.Diagnostics.AddError(
-			"Error Importing Bucket",
-			fmt.Sprintf("Could not import bucket %s: %s", bucketName, err.Error()),
+			"Bucket Not Found",
+			fmt.Sprintf("Bucket %s does not exist.", bucketName),
 		)
 		return
 	}
 
-	// Set attributes for import
+	// Admin API unavailable (e.g. the bucket owner has no buckets cap). Fall back
+	// to the S3 API, which works with the caller's own credentials and resolves
+	// their namespace — mirroring the Create/Read capless path. The subsequent
+	// Read refreshes the S3-derivable fields (owner/creation_time/versioning/tags).
+	tflog.Warn(ctx, "Admin API unavailable during import; falling back to S3-only metadata", map[string]any{
+		"bucket": bucketName,
+		"error":  err.Error(),
+	})
+
+	exists, headErr := bucketExistsViaS3(ctx, r.client.S3, bucketName)
+	if headErr != nil {
+		resp.Diagnostics.AddError(
+			"Error Importing Bucket",
+			fmt.Sprintf("Could not import bucket %s (admin API: %s; S3 API: %s)", bucketName, err.Error(), headErr.Error()),
+		)
+		return
+	}
+	if !exists {
+		resp.Diagnostics.AddError(
+			"Bucket Not Found",
+			fmt.Sprintf("Bucket %s does not exist.", bucketName),
+		)
+		return
+	}
+
+	resp.Diagnostics.AddWarning(
+		"Bucket imported without admin capabilities",
+		fmt.Sprintf("Bucket %q was imported over the S3 API. Admin-only attributes (num_shards, placement_rule, "+
+			"bucket_quota, etc.) are null and can't be managed with these credentials; re-import with admin "+
+			"credentials if you need them.", bucketName),
+	)
+
+	// Seed the capless steady-state so the follow-up Read produces a stable plan:
+	// object_lock_enabled is read over S3 (it is create-time-only and forces
+	// replacement, so an inaccurate value is unsafe); admin-only attributes are
+	// null without caps; tenant defaults to "" (the caller's own namespace).
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("bucket"), bucketName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), bucketName)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("force_destroy"), false)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("object_lock_enabled"), bucketInfo.ObjectLockEnabled)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tenant"), bucketInfo.Tenant)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tenant"), "")...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("object_lock_enabled"), bucketObjectLockEnabledViaS3(ctx, r.client.S3, bucketName))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("marker"), types.StringNull())...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("num_shards"), types.Int64Null())...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("index_type"), types.StringNull())...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("placement_rule"), types.StringNull())...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("zonegroup"), types.StringNull())...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("explicit_placement"), types.ObjectNull(explicitPlacementAttrTypes()))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("bucket_quota"), types.ObjectNull(bucketQuotaAttrTypes()))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("acl"), types.StringNull())...)
+}
+
+// bucketObjectLockEnabledViaS3 reports whether Object Lock is enabled on the
+// bucket using the S3 API (works with the owner's own credentials). Any error —
+// object lock not configured (NoSuchObjectLockConfiguration), unsupported, or not
+// permitted — is treated as "not enabled" so import never fails over detection.
+func bucketObjectLockEnabledViaS3(ctx context.Context, s3c *s3.Client, bucket string) bool {
+	out, err := s3c.GetObjectLockConfiguration(ctx, &s3.GetObjectLockConfigurationInput{Bucket: &bucket})
+	if err != nil {
+		tflog.Debug(ctx, "Could not read object lock configuration; assuming disabled", map[string]any{
+			"bucket": bucket,
+			"error":  err.Error(),
+		})
+		return false
+	}
+	return out.ObjectLockConfiguration != nil &&
+		out.ObjectLockConfiguration.ObjectLockEnabled == s3types.ObjectLockEnabledEnabled
 }
 
 // setBucketVersioning sets the versioning state on a bucket.

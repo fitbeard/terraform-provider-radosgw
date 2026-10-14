@@ -318,6 +318,17 @@ func TestAccRadosgwS3Bucket_caplessUser(t *testing.T) {
 					resource.TestCheckNoResourceAttr("radosgw_s3_bucket.test", "marker"),
 				),
 			},
+			{
+				// Import as the bucket owner (no admin caps): must succeed over the
+				// S3 API and round-trip the same capless state — the
+				// S3-derivable fields present, admin-only fields null.
+				ResourceName:                         "radosgw_s3_bucket.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIgnore:              []string{"force_destroy"},
+				ImportStateId:                        bucketName,
+				ImportStateVerifyIdentifierAttribute: "bucket",
+			},
 		},
 	})
 }
