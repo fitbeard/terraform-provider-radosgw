@@ -1,0 +1,21 @@
+services:
+  oidc-provider:
+    image: ghcr.io/plainscope/simple-oidc-provider:sha-f3f3c2c
+    container_name: oidc-provider
+    ports:
+      - "9080:8080"
+    environment:
+      NODE_ENV: development
+      # Issuer the IdP advertises (discovery, token `iss`). Overridable so it can
+      # match an address reachable by all parties — e.g. http://localhost:9080 on a
+      # normal host/CI, or http://host.docker.internal:9080 from a dev container
+      # where the published port is not on the container's own localhost.
+      ISSUER: ${OIDC_ISSUER:-http://localhost:9080}
+      CLIENT_ID: test-client
+      CLIENT_SECRET: test-secret
+      REDIRECT_URIS: http://localhost:3000/callback
+      DIRECTORY_TYPE: local
+      DIRECTORY_USERS: >-
+        [{"id":"radosgw-user","email":"radosgw@terraform","password":"test-password",
+        "name":"RadosGW User","given_name":"RadosGW","family_name":"User",
+        "email_verified":true,"groups":["admins"]}]

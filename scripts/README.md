@@ -68,6 +68,52 @@ Create a RADOS Gateway user for testing.
 ./scripts/create-rgw-user.sh myuser "My Test User"
 ```
 
+### compose.yml
+A Docker Compose definition for a local OpenID Connect (OIDC) provider used as the
+external IdP for RGW STS `AssumeRoleWithWebIdentity` testing. It runs
+[simple-oidc-provider](https://github.com/Plainscope/oidc-provider) on
+`http://localhost:9080` (issuer `http://localhost:9080`, client `test-client` /
+`test-secret`, one directory user `radosgw@terraform` / `test-password`).
+
+**Usage (via Makefile):**
+```bash
+make oidc-up      # start the provider and wait until healthy
+make oidc-token   # mint a JWT (id_token) from it
+make oidc-stop    # stop and remove it
+```
+
+**Issuer address.** The issuer must be reachable from wherever the tests and
+`radosgw` run, and must match the token's `iss` claim. The Makefile auto-detects
+it: on a normal host / CI runner it uses `http://localhost:9080`; in a dev
+container that uses *docker-outside-of-docker* (the published port is not on the
+container's own `localhost`, but the Docker host is reachable as
+`host.docker.internal`) it uses `http://host.docker.internal:9080`. Both the
+container's advertised `ISSUER` and the client are driven from the same value, so
+the flow and later RGW validation agree. Override with `OIDC_ISSUER=...` if needed:
+
+```bash
+make oidc-up OIDC_ISSUER=http://host.docker.internal:9080
+```
+
+The image ships its own container healthcheck, so `make oidc-wait` polls
+`docker inspect` health rather than the published port — which works regardless of
+how ports are mapped.
+
+### jwt-token.sh
+Mint a JWT (`id_token`) from the OIDC provider above via the Authorization Code +
+PKCE flow, printing the token to stdout for use with STS WebIdentity tests.
+
+**Usage:**
+```bash
+./scripts/jwt-token.sh            # prints the id_token (JWT) to stdout
+DEBUG=1 ./scripts/jwt-token.sh    # also dumps the token response + claims to stderr
+TOKEN=$(./scripts/jwt-token.sh)   # capture for use in a test
+```
+
+**Environment variables** (defaults match `compose.yml`): `OIDC_ISSUER`,
+`OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_REDIRECT_URI`, `OIDC_USERNAME`,
+`OIDC_PASSWORD`.
+
 ## Quick Start
 
 1. **Bootstrap the cluster:**

@@ -79,11 +79,22 @@ jobs:
           # Workaround for https://tracker.ceph.com/issues/74199
           sudo rm -fr /usr/share/ceph/mgr/dashboard/controllers/smb.py
       - run: make ci-setup
+      - name: Verify OIDC provider (STS/WebIdentity fixture)
+        run: |
+          DEBUG=1 ./scripts/jwt-token.sh > /tmp/id_token 2>/tmp/id_token.dbg || { cat /tmp/id_token.dbg; exit 1; }
+          cat /tmp/id_token.dbg
+          parts=$(awk -F. '{print NF}' /tmp/id_token)
+          [ "$parts" = "3" ] || { echo "ERROR: expected a 3-part JWT, got $parts"; exit 1; }
+          echo "OIDC id_token minted successfully"
       - run: make ci-test
         env:
           CEPH_VERSION: ${{ matrix.ceph-release }}
         timeout-minutes: 10
-      - run: make ceph-logs
+      - name: Dump logs on failure
         if: failure()
+        run: |
+          make ceph-logs
+          echo "=== OIDC provider logs ==="
+          docker compose -f scripts/compose.yml logs || true
       - run: make ci-cleanup
         if: always()

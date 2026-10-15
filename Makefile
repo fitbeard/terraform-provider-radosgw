@@ -15,6 +15,17 @@ CEPH_CONF = $(CEPH_DIR)/ceph.conf
 RGW_PORT = 7480
 RGW_ENDPOINT = http://127.0.0.1:$(RGW_PORT)
 
+# OIDC provider settings (for STS / AssumeRoleWithWebIdentity testing)
+OIDC_COMPOSE = docker compose -f scripts/compose.yml
+OIDC_CONTAINER = oidc-provider
+# Pick an issuer host reachable from wherever `make` (and radosgw) runs. In a
+# dev container using docker-outside-of-docker the published port is not on the
+# container's own localhost, but the Docker host is reachable as
+# host.docker.internal; on a normal host / CI runner, localhost works. Override
+# OIDC_ISSUER to force a specific value.
+OIDC_HOST := $(shell getent hosts host.docker.internal >/dev/null 2>&1 && echo host.docker.internal || echo localhost)
+OIDC_ISSUER ?= http://$(OIDC_HOST):9080
+
 # Test settings
 TEST_DIR = test
 TEST_TIMEOUT = 5m
@@ -82,6 +93,7 @@ testacc: ## Run acceptance tests (requires running Ceph cluster)
 	RADOSGW_ENDPOINT=$(RGW_ENDPOINT) \
 	RADOSGW_ACCESS_KEY=$(TEST_ACCESS_KEY) \
 	RADOSGW_SECRET_KEY=$(TEST_SECRET_KEY) \
+	RADOSGW_OIDC_ISSUER=$(OIDC_ISSUER) \
 	go test -v -cover -timeout $(TEST_TIMEOUT) ./...
 
 # =============================================================================
@@ -172,6 +184,40 @@ ceph-setup: ceph-bootstrap ceph-user ceph-wait ## Full Ceph cluster setup (boots
 	@echo ""
 
 # =============================================================================
+# OIDC Provider (STS / WebIdentity)
+# =============================================================================
+# A local OpenID Connect provider (scripts/compose.yml) used as the external IdP
+# for RGW STS AssumeRoleWithWebIdentity testing. scripts/jwt-token.sh mints a JWT
+# (id_token) from it via the Authorization Code + PKCE flow.
+
+.PHONY: oidc-up
+oidc-up: ## Start the local OIDC provider (for STS/WebIdentity tests)
+	@echo "Starting OIDC provider (issuer: $(OIDC_ISSUER))..."
+	OIDC_ISSUER=$(OIDC_ISSUER) $(OIDC_COMPOSE) up -d
+	@$(MAKE) --no-print-directory oidc-wait
+
+.PHONY: oidc-wait
+oidc-wait: ## Wait for the OIDC provider to be healthy
+	@echo "Waiting for OIDC provider to be healthy..."
+	@for i in $$(seq 1 30); do \
+		if [ "$$(docker inspect -f '{{.State.Health.Status}}' $(OIDC_CONTAINER) 2>/dev/null)" = "healthy" ]; then \
+			echo "OIDC provider is ready!"; exit 0; \
+		fi; \
+		if [ $$i -eq 30 ]; then echo "ERROR: OIDC provider failed to become healthy"; exit 1; fi; \
+		sleep 1; \
+	done
+
+.PHONY: oidc-token
+oidc-token: ## Mint a JWT (id_token) from the local OIDC provider
+	@chmod +x ./scripts/jwt-token.sh
+	@OIDC_ISSUER=$(OIDC_ISSUER) ./scripts/jwt-token.sh
+
+.PHONY: oidc-stop
+oidc-stop: ## Stop and remove the local OIDC provider
+	@echo "Stopping OIDC provider..."
+	$(OIDC_COMPOSE) down -v || true
+
+# =============================================================================
 # Development Workflow
 # =============================================================================
 
@@ -220,7 +266,7 @@ tf-test: tf-init tf-apply ## Run Terraform test (init + apply)
 # =============================================================================
 
 .PHONY: ci-setup
-ci-setup: ceph-setup ## CI: Setup Ceph cluster for acceptance tests
+ci-setup: ceph-setup oidc-up ## CI: Setup Ceph cluster + OIDC provider for acceptance tests
 	@echo "CI setup complete"
 
 .PHONY: ci-test
@@ -228,7 +274,7 @@ ci-test: testacc ## CI: Run acceptance tests
 	@echo "CI tests complete"
 
 .PHONY: ci-cleanup
-ci-cleanup: ceph-stop ## CI: Cleanup after tests
+ci-cleanup: ceph-stop oidc-stop ## CI: Cleanup after tests
 	@echo "CI cleanup complete"
 
 # =============================================================================
@@ -263,4 +309,5 @@ help: ## Show this help message
 	@echo "  CEPH_DIR        Ceph cluster directory (default: /tmp/ceph-dev)"
 	@echo "  CEPH_VERSION    Ceph version for version-specific tests"
 	@echo "  TEST_TIMEOUT    Acceptance test timeout (default: 120m)"
+	@echo "  OIDC_ISSUER     Local OIDC provider issuer (default: http://localhost:9080)"
 	@echo ""
