@@ -22,6 +22,9 @@
     },
     "ghcr.io/devcontainers-extra/features/terraform-asdf:2": {
       "version": "1.15.8"
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false
     }
   },
   "customizations": {
