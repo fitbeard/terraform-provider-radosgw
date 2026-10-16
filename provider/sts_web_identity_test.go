@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -188,4 +189,176 @@ func mintOIDCToken(issuer string) (string, error) {
 		return "", fmt.Errorf("jwt-token.sh did not return a JWT: %q", token)
 	}
 	return token, nil
+}
+
+// TestAccSTSAssumeRoleWithWebIdentityProvider exercises the provider's
+// assume_role_with_web_identity block: an OIDC provider and a federated role are
+// registered out-of-band, a JWT is minted to a file, and a provider configured
+// with web identity (no static credentials) creates an S3 bucket.
+//
+// Not parallel: it shares the single OIDC provider registration (one per issuer
+// URL) with TestAccSTSAssumeRoleWithWebIdentity; running in the sequential phase
+// avoids a registration collision.
+func TestAccSTSAssumeRoleWithWebIdentityProvider(t *testing.T) {
+	issuer := os.Getenv("RADOSGW_OIDC_ISSUER")
+	if issuer == "" {
+		t.Skip("RADOSGW_OIDC_ISSUER not set; start the OIDC provider with `make oidc-up`")
+	}
+	testAccPreCheck(t)
+
+	host := strings.TrimPrefix(strings.TrimPrefix(issuer, "https://"), "http://")
+	roleName := randomName("tfaccwebidprov")
+	roleARN := "arn:aws:iam:::role/" + roleName
+	bucketName := randomName("tf-acc-wi-bucket")
+
+	iam := testAccAdminIAMClient()
+	if err := testAccRegisterOIDCProvider(iam, issuer); err != nil {
+		t.Fatalf("register OIDC provider: %s", err)
+	}
+	t.Cleanup(func() { _ = testAccDeleteOIDCProvider(iam, host) })
+
+	trust := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam:::oidc-provider/%s"},"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"StringEquals":{"%s:app_id":"test-client"}}}]}`, host, host)
+	if err := testAccCreateRoleFixture(iam, roleName, trust); err != nil {
+		t.Fatalf("create federated role: %s", err)
+	}
+	t.Cleanup(func() { _ = testAccDeleteRoleFixture(iam, roleName) })
+
+	token, err := mintOIDCToken(issuer)
+	if err != nil {
+		t.Fatalf("mint token: %s", err)
+	}
+	tokenFile := filepath.Join(t.TempDir(), "token.jwt")
+	if err := os.WriteFile(tokenFile, []byte(token), 0o600); err != nil {
+		t.Fatalf("write token file: %s", err)
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccWebIdentityProviderConfig(roleARN, tokenFile, bucketName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("radosgw_s3_bucket.test", "bucket", bucketName),
+					resource.TestCheckResourceAttrSet("radosgw_s3_bucket.test", "owner"),
+					// Admin-only attributes are null (Admin API has no session token).
+					resource.TestCheckNoResourceAttr("radosgw_s3_bucket.test", "num_shards"),
+				),
+			},
+		},
+	})
+}
+
+func testAccWebIdentityProviderConfig(roleARN, tokenFile, bucketName string) string {
+	// Web identity is anonymous — no access_key/secret_key.
+	return fmt.Sprintf(`
+provider "radosgw" {
+  endpoint = %[1]q
+  assume_role_with_web_identity {
+    role_arn                = %[2]q
+    session_name            = "tf-acc"
+    web_identity_token_file = %[3]q
+  }
+}
+
+resource "radosgw_s3_bucket" "test" {
+  bucket        = %[4]q
+  force_destroy = true
+}
+`, os.Getenv("RADOSGW_ENDPOINT"), roleARN, tokenFile, bucketName)
+}
+
+func testAccRegisterOIDCProvider(iam *IAMClient, issuer string) error {
+	ctx := context.Background()
+	p := url.Values{}
+	p.Set("Action", "CreateOpenIDConnectProvider")
+	p.Set("Version", "2010-05-08")
+	p.Set("Url", issuer)
+	p.Set("ClientIDList.member.1", "test-client")
+	p.Set("ThumbprintList.member.1", "0000000000000000000000000000000000000000")
+	if _, err := iam.DoPostRequest(ctx, p, "iam"); err != nil {
+		// Tolerate a leftover provider from a previous run.
+		if strings.Contains(err.Error(), "EntityAlreadyExists") {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func testAccDeleteOIDCProvider(iam *IAMClient, host string) error {
+	ctx := context.Background()
+	p := url.Values{}
+	p.Set("Action", "DeleteOpenIDConnectProvider")
+	p.Set("Version", "2010-05-08")
+	p.Set("OpenIDConnectProviderArn", "arn:aws:iam:::oidc-provider/"+host)
+	_, err := iam.DoPostRequest(ctx, p, "iam")
+	return err
+}
+
+// TestAccSTSAssumeRoleWithWebIdentityEnv verifies web identity can be configured
+// purely from environment variables (no assume_role_with_web_identity block, and
+// with static RADOSGW_ACCESS_KEY/SECRET_KEY present but ignored). Not parallel: it
+// uses t.Setenv and shares the single OIDC provider registration.
+func TestAccSTSAssumeRoleWithWebIdentityEnv(t *testing.T) {
+	issuer := os.Getenv("RADOSGW_OIDC_ISSUER")
+	if issuer == "" {
+		t.Skip("RADOSGW_OIDC_ISSUER not set; start the OIDC provider with `make oidc-up`")
+	}
+	testAccPreCheck(t)
+
+	host := strings.TrimPrefix(strings.TrimPrefix(issuer, "https://"), "http://")
+	roleName := randomName("tfaccwebidenv")
+	roleARN := "arn:aws:iam:::role/" + roleName
+	bucketName := randomName("tf-acc-wi-bucket")
+
+	iam := testAccAdminIAMClient()
+	if err := testAccRegisterOIDCProvider(iam, issuer); err != nil {
+		t.Fatalf("register OIDC provider: %s", err)
+	}
+	t.Cleanup(func() { _ = testAccDeleteOIDCProvider(iam, host) })
+
+	trust := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam:::oidc-provider/%s"},"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"StringEquals":{"%s:app_id":"test-client"}}}]}`, host, host)
+	if err := testAccCreateRoleFixture(iam, roleName, trust); err != nil {
+		t.Fatalf("create federated role: %s", err)
+	}
+	t.Cleanup(func() { _ = testAccDeleteRoleFixture(iam, roleName) })
+
+	token, err := mintOIDCToken(issuer)
+	if err != nil {
+		t.Fatalf("mint token: %s", err)
+	}
+	tokenFile := filepath.Join(t.TempDir(), "token.jwt")
+	if err := os.WriteFile(tokenFile, []byte(token), 0o600); err != nil {
+		t.Fatalf("write token file: %s", err)
+	}
+
+	// Configure web identity entirely via environment variables. The static
+	// RADOSGW_ACCESS_KEY/SECRET_KEY (set by the test harness) must be ignored.
+	t.Setenv("RADOSGW_ROLE_ARN", roleARN)
+	t.Setenv("RADOSGW_WEB_IDENTITY_TOKEN_FILE", tokenFile)
+	t.Setenv("RADOSGW_ROLE_SESSION_NAME", "tf-acc-env")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
+		Steps: []resource.TestStep{
+			{
+				// Empty provider block — web identity comes from the environment.
+				Config: providerConfig() + fmt.Sprintf(`
+resource "radosgw_s3_bucket" "test" {
+  bucket        = %q
+  force_destroy = true
+}
+`, bucketName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("radosgw_s3_bucket.test", "bucket", bucketName),
+					resource.TestCheckResourceAttrSet("radosgw_s3_bucket.test", "owner"),
+					resource.TestCheckNoResourceAttr("radosgw_s3_bucket.test", "num_shards"),
+				),
+			},
+		},
+	})
 }

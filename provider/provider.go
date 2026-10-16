@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -42,7 +43,8 @@ type RadosgwProviderModel struct {
 	RootCACertificate     types.String `tfsdk:"root_ca_certificate"`
 	RootCACertificateFile types.String `tfsdk:"root_ca_certificate_file"`
 
-	AssumeRole *assumeRoleModel `tfsdk:"assume_role"`
+	AssumeRole                *assumeRoleModel                `tfsdk:"assume_role"`
+	AssumeRoleWithWebIdentity *assumeRoleWithWebIdentityModel `tfsdk:"assume_role_with_web_identity"`
 }
 
 // assumeRoleModel is the provider's assume_role block — static credentials are
@@ -54,6 +56,19 @@ type assumeRoleModel struct {
 	Duration    types.String `tfsdk:"duration"`
 }
 
+// assumeRoleWithWebIdentityModel is the provider's assume_role_with_web_identity
+// block — a web identity token (OIDC JWT) is exchanged for temporary credentials
+// via STS AssumeRoleWithWebIdentity (anonymous), so no static credentials are
+// required.
+type assumeRoleWithWebIdentityModel struct {
+	RoleARN              types.String `tfsdk:"role_arn"`
+	SessionName          types.String `tfsdk:"session_name"`
+	WebIdentityToken     types.String `tfsdk:"web_identity_token"`
+	WebIdentityTokenFile types.String `tfsdk:"web_identity_token_file"`
+	Policy               types.String `tfsdk:"policy"`
+	Duration             types.String `tfsdk:"duration"`
+}
+
 // assumeRoleHasUnknown reports whether any assume_role attribute is unknown at
 // plan time (e.g. role_arn sourced from a resource created in the same apply),
 // so client creation can be deferred to apply like the top-level credentials.
@@ -63,6 +78,21 @@ func assumeRoleHasUnknown(m *assumeRoleModel) bool {
 	}
 	return m.RoleARN.IsUnknown() ||
 		m.SessionName.IsUnknown() ||
+		m.Policy.IsUnknown() ||
+		m.Duration.IsUnknown()
+}
+
+// assumeRoleWithWebIdentityHasUnknown reports whether any
+// assume_role_with_web_identity attribute is unknown at plan time (e.g. the
+// web_identity_token sourced from a resource created in the same apply).
+func assumeRoleWithWebIdentityHasUnknown(m *assumeRoleWithWebIdentityModel) bool {
+	if m == nil {
+		return false
+	}
+	return m.RoleARN.IsUnknown() ||
+		m.SessionName.IsUnknown() ||
+		m.WebIdentityToken.IsUnknown() ||
+		m.WebIdentityTokenFile.IsUnknown() ||
 		m.Policy.IsUnknown() ||
 		m.Duration.IsUnknown()
 }
@@ -121,13 +151,15 @@ radosgw-admin caps add --uid=admin --caps="accounts=*;buckets=*;metadata=*;oidc-
 				Optional:            true,
 			},
 			"access_key": schema.StringAttribute{
-				MarkdownDescription: "RadosGW access key. Can be set via the `RADOSGW_ACCESS_KEY` environment variable.",
-				Optional:            true,
+				MarkdownDescription: "RadosGW access key. Can be set via the `RADOSGW_ACCESS_KEY` environment variable. " +
+					"Required for static credentials and for `assume_role`; ignored (and not required) when `assume_role_with_web_identity` is used.",
+				Optional: true,
 			},
 			"secret_key": schema.StringAttribute{
-				MarkdownDescription: "RadosGW secret key. Can be set via the `RADOSGW_SECRET_KEY` environment variable.",
-				Optional:            true,
-				Sensitive:           true,
+				MarkdownDescription: "RadosGW secret key. Can be set via the `RADOSGW_SECRET_KEY` environment variable. " +
+					"Required for static credentials and for `assume_role`; ignored (and not required) when `assume_role_with_web_identity` is used.",
+				Optional:  true,
+				Sensitive: true,
 			},
 			"tls_insecure_skip_verify": schema.BoolAttribute{
 				MarkdownDescription: "Skip TLS certificate verification for HTTPS connections. This is useful when connecting to RadosGW with self-signed certificates or certificates signed by an untrusted CA. Has no effect on plain HTTP connections. Can be set via the `RADOSGW_TLS_INSECURE_SKIP_VERIFY` environment variable. Default is `false`.",
@@ -169,6 +201,42 @@ radosgw-admin caps add --uid=admin --caps="accounts=*;buckets=*;metadata=*;oidc-
 					},
 				},
 			},
+			"assume_role_with_web_identity": schema.SingleNestedBlock{
+				MarkdownDescription: "Assume an IAM role with a web identity token (STS `AssumeRoleWithWebIdentity`), and use the resulting temporary credentials for all subsequent calls. " +
+					"The token is an OIDC JWT; this call is anonymous, so `access_key`/`secret_key` are **not** required. The role's trust policy must federate the OIDC provider and permit the token's audience. " +
+					"`role_arn` accepts both the non-account form (`arn:aws:iam:::role/<name>`) and the account-scoped form (`arn:aws:iam::<account-id>:role/<name>`). Mutually exclusive with `assume_role`.\n\n" +
+					"This block can also be configured entirely via environment variables — `RADOSGW_ROLE_ARN` (also activates web identity on its own), `RADOSGW_ROLE_SESSION_NAME`, `RADOSGW_WEB_IDENTITY_TOKEN`, and `RADOSGW_WEB_IDENTITY_TOKEN_FILE` — with block values taking precedence over the environment.\n\n" +
+					"~> **Note:** When web identity is used, static credentials (`access_key`/`secret_key` and `RADOSGW_ACCESS_KEY`/`RADOSGW_SECRET_KEY`) are ignored.\n\n" +
+					"~> **Note:** As with `assume_role`, the resulting temporary credentials cannot drive the Admin Ops API (no session token support), so Admin-API-backed data is unavailable — use them for S3 and IAM role/policy/OIDC resources.",
+				Attributes: map[string]schema.Attribute{
+					"role_arn": schema.StringAttribute{
+						MarkdownDescription: "ARN of the IAM role to assume, e.g. `arn:aws:iam:::role/my-role`. Can be set via the `RADOSGW_ROLE_ARN` environment variable.",
+						Optional:            true,
+					},
+					"session_name": schema.StringAttribute{
+						MarkdownDescription: "Session name to use when assuming the role. Can be set via the `RADOSGW_ROLE_SESSION_NAME` environment variable. Defaults to `terraform`.",
+						Optional:            true,
+					},
+					"web_identity_token": schema.StringAttribute{
+						MarkdownDescription: "The OIDC web identity token (JWT) to exchange for credentials. Can be set via the `RADOSGW_WEB_IDENTITY_TOKEN` environment variable. Exactly one web identity token source (`web_identity_token` or `web_identity_token_file`) must be set.",
+						Optional:            true,
+						Sensitive:           true,
+					},
+					"web_identity_token_file": schema.StringAttribute{
+						MarkdownDescription: "Path to a file containing the OIDC web identity token (JWT). Can be set via the `RADOSGW_WEB_IDENTITY_TOKEN_FILE` environment variable. Exactly one web identity token source (`web_identity_token` or `web_identity_token_file`) must be set.",
+						Optional:            true,
+					},
+					"policy": schema.StringAttribute{
+						MarkdownDescription: "An IAM policy document (JSON) applied as a session policy to further restrict the session. " +
+							"**Note:** on RadosGW only explicit `Deny` statements are enforced — allow-only scope-down is not applied.",
+						Optional: true,
+					},
+					"duration": schema.StringAttribute{
+						MarkdownDescription: "Lifetime of the assumed-role session, as a Go duration string (e.g. `1h`, `30m`). Defaults to `1h`. Subject to the role's maximum session duration.",
+						Optional:            true,
+					},
+				},
+			},
 		},
 	}
 }
@@ -197,7 +265,8 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 		config.TLSInsecureSkipVerify.IsUnknown() ||
 		config.RootCACertificate.IsUnknown() ||
 		config.RootCACertificateFile.IsUnknown() ||
-		assumeRoleHasUnknown(config.AssumeRole) {
+		assumeRoleHasUnknown(config.AssumeRole) ||
+		assumeRoleWithWebIdentityHasUnknown(config.AssumeRoleWithWebIdentity) {
 		tflog.Debug(ctx, "Deferring RadosGW client creation: provider configuration has unknown values at plan time")
 		return
 	}
@@ -230,6 +299,24 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 		rootCACertificateFile = config.RootCACertificateFile.ValueString()
 	}
 
+	// assume_role and assume_role_with_web_identity are mutually exclusive.
+	if config.AssumeRole != nil && config.AssumeRoleWithWebIdentity != nil {
+		resp.Diagnostics.AddError(
+			"Conflicting Provider Authentication",
+			"Only one of `assume_role` and `assume_role_with_web_identity` may be set.",
+		)
+		return
+	}
+
+	// Web identity can be configured via the assume_role_with_web_identity block or
+	// purely via environment variables (RADOSGW_ROLE_ARN activates it). It is
+	// anonymous — the token is the credential — so static credentials (access_key /
+	// secret_key, RADOSGW_ACCESS_KEY / RADOSGW_SECRET_KEY) are not required and are
+	// ignored. An explicit assume_role block takes precedence over web-identity
+	// environment variables.
+	webIdentity := config.AssumeRole == nil &&
+		(config.AssumeRoleWithWebIdentity != nil || os.Getenv("RADOSGW_ROLE_ARN") != "")
+
 	// Validate required fields
 	if endpoint == "" {
 		resp.Diagnostics.AddAttributeError(
@@ -241,7 +328,7 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 		)
 	}
 
-	if accessKey == "" {
+	if !webIdentity && accessKey == "" {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("access_key"),
 			"Missing RadosGW Access Key",
@@ -251,7 +338,7 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 		)
 	}
 
-	if secretKey == "" {
+	if !webIdentity && secretKey == "" {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("secret_key"),
 			"Missing RadosGW Secret Key",
@@ -330,7 +417,8 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 
 	// Effective credentials: the static ones by default, or temporary
-	// (assumed-role) credentials when an assume_role block is configured.
+	// (assumed-role) credentials when an assume_role or
+	// assume_role_with_web_identity block is configured.
 	effAccessKey, effSecretKey, effSessionToken := accessKey, secretKey, ""
 
 	if config.AssumeRole != nil {
@@ -379,6 +467,101 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 		}
 		effAccessKey, effSecretKey, effSessionToken = creds.AccessKeyID, creds.SecretAccessKey, creds.SessionToken
 		tflog.Info(ctx, "Assumed role for RadosGW provider", map[string]any{"role_arn": roleARN})
+	}
+
+	if webIdentity {
+		// Resolve each value from the block, falling back to the environment. Per
+		// the AWS provider, environment variables are only supported for web
+		// identity (not for assume_role), and block values take precedence.
+		roleARN := os.Getenv("RADOSGW_ROLE_ARN")
+		sessionName := os.Getenv("RADOSGW_ROLE_SESSION_NAME")
+		token := os.Getenv("RADOSGW_WEB_IDENTITY_TOKEN")
+		tokenFile := os.Getenv("RADOSGW_WEB_IDENTITY_TOKEN_FILE")
+		policy := ""
+		durationStr := ""
+
+		if w := config.AssumeRoleWithWebIdentity; w != nil {
+			if !w.RoleARN.IsNull() && w.RoleARN.ValueString() != "" {
+				roleARN = w.RoleARN.ValueString()
+			}
+			if !w.SessionName.IsNull() && w.SessionName.ValueString() != "" {
+				sessionName = w.SessionName.ValueString()
+			}
+			if !w.Policy.IsNull() {
+				policy = w.Policy.ValueString()
+			}
+			if !w.Duration.IsNull() {
+				durationStr = w.Duration.ValueString()
+			}
+			// The block takes precedence over the environment for both token
+			// sources: if the block sets either one, the env token sources are
+			// ignored entirely.
+			if (!w.WebIdentityToken.IsNull() && w.WebIdentityToken.ValueString() != "") ||
+				(!w.WebIdentityTokenFile.IsNull() && w.WebIdentityTokenFile.ValueString() != "") {
+				token = w.WebIdentityToken.ValueString()
+				tokenFile = w.WebIdentityTokenFile.ValueString()
+			}
+		}
+
+		if roleARN == "" {
+			resp.Diagnostics.AddError(
+				"Missing Role ARN",
+				"Web identity authentication requires a role ARN. Set `role_arn` in the assume_role_with_web_identity block or the RADOSGW_ROLE_ARN environment variable.",
+			)
+			return
+		}
+		if (token == "") == (tokenFile == "") {
+			resp.Diagnostics.AddError(
+				"Invalid Web Identity Token Configuration",
+				"Exactly one web identity token source must be set: `web_identity_token` or `web_identity_token_file` in the block, or the RADOSGW_WEB_IDENTITY_TOKEN or RADOSGW_WEB_IDENTITY_TOKEN_FILE environment variable.",
+			)
+			return
+		}
+		if tokenFile != "" {
+			b, rerr := os.ReadFile(tokenFile)
+			if rerr != nil {
+				resp.Diagnostics.AddError(
+					"Unable to Read Web Identity Token File",
+					fmt.Sprintf("Failed to read the web identity token file at %s: %s", tokenFile, rerr.Error()),
+				)
+				return
+			}
+			token = strings.TrimSpace(string(b))
+		}
+
+		durationSeconds := 3600
+		if durationStr != "" {
+			parsed, perr := time.ParseDuration(durationStr)
+			if perr != nil {
+				resp.Diagnostics.AddError(
+					"Invalid Assume Role Duration",
+					fmt.Sprintf("Could not parse duration %q: %s. Use a Go duration string such as \"1h\" or \"30m\".", durationStr, perr.Error()),
+				)
+				return
+			}
+			durationSeconds = int(parsed.Seconds())
+		}
+
+		if sessionName == "" {
+			sessionName = "terraform"
+		}
+
+		creds, aerr := assumeRoleWithWebIdentity(ctx, endpoint, httpClient, assumeRoleWithWebIdentityParams{
+			RoleARN:          roleARN,
+			RoleSessionName:  sessionName,
+			WebIdentityToken: token,
+			Policy:           policy,
+			DurationSeconds:  durationSeconds,
+		})
+		if aerr != nil {
+			resp.Diagnostics.AddError(
+				"Unable to Assume Role With Web Identity",
+				fmt.Sprintf("Could not assume role %s: %s", roleARN, aerr.Error()),
+			)
+			return
+		}
+		effAccessKey, effSecretKey, effSessionToken = creds.AccessKeyID, creds.SecretAccessKey, creds.SessionToken
+		tflog.Info(ctx, "Assumed role with web identity for RadosGW provider", map[string]any{"role_arn": roleARN})
 	}
 
 	// Create Admin API client. Note: the Admin Ops API does not support a session

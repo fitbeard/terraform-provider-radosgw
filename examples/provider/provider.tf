@@ -4,12 +4,14 @@ provider "radosgw" {
   # Can also be set via RADOSGW_ENDPOINT environment variable
   endpoint = "http://127.0.0.1:7480"
 
-  # Access key for authentication (required)
-  # Can also be set via RADOSGW_ACCESS_KEY environment variable
+  # Access key for authentication
+  # Required for static credentials and for assume_role; omit when using
+  # assume_role_with_web_identity. Can also be set via RADOSGW_ACCESS_KEY.
   access_key = "admin-access-key"
 
-  # Secret key for authentication (required)
-  # Can also be set via RADOSGW_SECRET_KEY environment variable
+  # Secret key for authentication
+  # Required for static credentials and for assume_role; omit when using
+  # assume_role_with_web_identity. Can also be set via RADOSGW_SECRET_KEY.
   secret_key = "admin-secret-key"
 }
 
@@ -110,5 +112,23 @@ provider "radosgw" {
 #     role_arn     = "arn:aws:iam:::role/terraform"
 #     session_name = "terraform"
 #     policy       = file("${path.module}/session-policy.json")
+#   }
+# }
+
+# Assuming a role with a web identity token (OIDC federation)
+# No static credentials are required — the OIDC JWT is the credential. The role's
+# trust policy must federate the OIDC provider and permit the token's audience.
+# Provide the token inline (web_identity_token) or from a file
+# (web_identity_token_file) — exactly one of the two.
+# provider "radosgw" {
+#   endpoint = "http://rgw.example.com:7480"
+#
+#   assume_role_with_web_identity {
+#     role_arn                = "arn:aws:iam:::role/terraform"
+#     session_name            = "terraform"
+#     web_identity_token_file = "/var/run/secrets/openid/token"
+#     # web_identity_token    = var.oidc_token   # alternative to the file
+#     # policy   = "..."   # optional inline session policy (JSON)
+#     # duration = "1h"    # session lifetime (default 1h)
 #   }
 # }
