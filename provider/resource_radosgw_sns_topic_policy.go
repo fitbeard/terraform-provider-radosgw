@@ -98,12 +98,7 @@ func (r *SNSTopicPolicyResource) Configure(ctx context.Context, req resource.Con
 	}
 
 	r.client = client
-	r.iamClient = NewIAMClient(
-		client.Admin.Endpoint,
-		client.Admin.AccessKey,
-		client.Admin.SecretKey,
-		client.Admin.HTTPClient,
-	)
+	r.iamClient = newAccountIAMClient(client)
 }
 
 func (r *SNSTopicPolicyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

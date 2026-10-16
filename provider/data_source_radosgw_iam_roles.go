@@ -109,12 +109,7 @@ func (d *RolesDataSource) Configure(ctx context.Context, req datasource.Configur
 	}
 
 	d.client = client
-	d.iamClient = NewIAMClient(
-		client.Admin.Endpoint,
-		client.Admin.AccessKey,
-		client.Admin.SecretKey,
-		client.Admin.HTTPClient,
-	)
+	d.iamClient = newAccountIAMClient(client)
 }
 
 func (d *RolesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {

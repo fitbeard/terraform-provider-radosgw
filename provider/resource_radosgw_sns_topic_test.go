@@ -193,6 +193,7 @@ func testAccCheckRadosgwSNSTopicExists(resourceName string) resource.TestCheckFu
 			testAccAdminClient.Endpoint,
 			testAccAdminClient.AccessKey,
 			testAccAdminClient.SecretKey,
+			"",
 			testAccAdminClient.HTTPClient,
 		)
 
@@ -225,6 +226,7 @@ func testAccCheckRadosgwSNSTopicDestroy(s *terraform.State) error {
 		testAccAdminClient.Endpoint,
 		testAccAdminClient.AccessKey,
 		testAccAdminClient.SecretKey,
+		"",
 		testAccAdminClient.HTTPClient,
 	)
 

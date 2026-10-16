@@ -75,7 +75,7 @@ resource "radosgw_iam_access_key" "root" {
 func testAccCheckMemberSelfCreateAccessKey(rootAK, rootSK, member string) resource.TestCheckFunc {
 	return func(_ *terraform.State) error {
 		endpoint := os.Getenv("RADOSGW_ENDPOINT")
-		root := NewIAMClient(endpoint, rootAK, rootSK, nil)
+		root := NewIAMClient(endpoint, rootAK, rootSK, "", nil)
 
 		// 1. Root creates the member user.
 		if _, err := root.DoRequest(testCtx, iamParams("CreateUser", map[string]string{"UserName": member}), "iam"); err != nil {
@@ -89,7 +89,7 @@ func testAccCheckMemberSelfCreateAccessKey(rootAK, rootSK, member string) resour
 		if err != nil {
 			return fmt.Errorf("root CreateAccessKey(%s): %w", member, err)
 		}
-		memberClient := NewIAMClient(endpoint, memberAK, memberSK, nil)
+		memberClient := NewIAMClient(endpoint, memberAK, memberSK, "", nil)
 
 		// 3. NEGATIVE control: without a policy, self-service key creation is denied.
 		_, err = memberClient.DoRequest(testCtx, iamParams("CreateAccessKey", map[string]string{"UserName": member}), "iam")
