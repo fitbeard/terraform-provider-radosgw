@@ -252,9 +252,10 @@ func iamDetachPolicy(ctx context.Context, c *IAMClient, action, entityKey, entit
 // configured endpoint/credentials — typically an account root user).
 func newAccountIAMClient(client *RadosgwClient) *IAMClient {
 	return NewIAMClient(
-		client.Admin.Endpoint,
-		client.Admin.AccessKey,
-		client.Admin.SecretKey,
-		client.Admin.HTTPClient,
+		client.Endpoint,
+		client.AccessKey,
+		client.SecretKey,
+		client.SessionToken,
+		client.HTTPClient,
 	)
 }

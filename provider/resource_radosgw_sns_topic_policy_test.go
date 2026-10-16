@@ -116,6 +116,7 @@ func testAccCheckRadosgwSNSTopicPolicyExists(resourceName string) resource.TestC
 			testAccAdminClient.Endpoint,
 			testAccAdminClient.AccessKey,
 			testAccAdminClient.SecretKey,
+			"",
 			testAccAdminClient.HTTPClient,
 		)
 
@@ -152,6 +153,7 @@ func testAccCheckRadosgwSNSTopicPolicyDestroy(s *terraform.State) error {
 		testAccAdminClient.Endpoint,
 		testAccAdminClient.AccessKey,
 		testAccAdminClient.SecretKey,
+		"",
 		testAccAdminClient.HTTPClient,
 	)
 
@@ -212,6 +214,7 @@ func testAccDeleteSNSTopic(resourceName string) resource.TestCheckFunc {
 			testAccAdminClient.Endpoint,
 			testAccAdminClient.AccessKey,
 			testAccAdminClient.SecretKey,
+			"",
 			testAccAdminClient.HTTPClient,
 		)
 

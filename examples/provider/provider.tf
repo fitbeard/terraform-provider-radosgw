@@ -49,3 +49,66 @@ provider "radosgw" {
 #   secret_key                 = "admin-secret-key"
 #   tls_insecure_skip_verify   = true
 # }
+
+# Assuming an IAM role (STS AssumeRole)
+# The static access_key/secret_key are exchanged for temporary credentials for the
+# role, which are then used for all S3 and IAM/STS calls. The role must already
+# exist and its trust policy must allow these credentials to assume it.
+# Note: the Admin Ops API cannot use the session token that comes with temporary
+# credentials, so Admin-API-backed data is unavailable under an assumed role (the
+# same behavior as a user without admin capabilities) — use it for S3 and IAM
+# role/policy/OIDC resources.
+# provider "radosgw" {
+#   endpoint   = "http://rgw.example.com:7480"
+#   access_key = "admin-access-key"
+#   secret_key = "admin-secret-key"
+#
+#   assume_role {
+#     # role_arn accepts the non-account form (arn:aws:iam:::role/<name>) or the
+#     # account-scoped form (arn:aws:iam::<account-id>:role/<name>).
+#     role_arn     = "arn:aws:iam:::role/terraform"
+#     session_name = "terraform"
+#     # duration  = "1h"    # session lifetime (default 1h)
+#     # Note: RadosGW does not support an external ID, so there is no external_id argument.
+#   }
+# }
+
+# Assuming a role with an inline session policy (jsonencode)
+# The session policy further restricts the assumed session. On RadosGW, use
+# explicit Deny statements — allow-only scope-down (AWS implicit deny) is not
+# enforced.
+# provider "radosgw" {
+#   endpoint   = "http://rgw.example.com:7480"
+#   access_key = "admin-access-key"
+#   secret_key = "admin-secret-key"
+#
+#   assume_role {
+#     role_arn     = "arn:aws:iam:::role/terraform"
+#     session_name = "terraform"
+#
+#     policy = jsonencode({
+#       Version = "2012-10-17"
+#       Statement = [
+#         {
+#           Sid      = "DenyBucketDeletion"
+#           Effect   = "Deny"
+#           Action   = ["s3:DeleteBucket"]
+#           Resource = ["*"]
+#         }
+#       ]
+#     })
+#   }
+# }
+
+# Assuming a role with the session policy read from a file
+# provider "radosgw" {
+#   endpoint   = "http://rgw.example.com:7480"
+#   access_key = "admin-access-key"
+#   secret_key = "admin-secret-key"
+#
+#   assume_role {
+#     role_arn     = "arn:aws:iam:::role/terraform"
+#     session_name = "terraform"
+#     policy       = file("${path.module}/session-policy.json")
+#   }
+# }

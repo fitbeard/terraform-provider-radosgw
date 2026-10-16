@@ -61,7 +61,7 @@ func (ar testAccountRoot) destroy(_ *terraform.State) error {
 
 // iamClient returns an IAM client authenticated as this account root.
 func (ar testAccountRoot) iamClient() *IAMClient {
-	return NewIAMClient(os.Getenv("RADOSGW_ENDPOINT"), ar.accessKey, ar.secretKey, nil)
+	return NewIAMClient(os.Getenv("RADOSGW_ENDPOINT"), ar.accessKey, ar.secretKey, "", nil)
 }
 
 // rootProviderConfig emits the default provider plus an aliased "root" provider.

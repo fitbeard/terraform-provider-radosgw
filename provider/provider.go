@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -39,12 +41,44 @@ type RadosgwProviderModel struct {
 	TLSInsecureSkipVerify types.Bool   `tfsdk:"tls_insecure_skip_verify"`
 	RootCACertificate     types.String `tfsdk:"root_ca_certificate"`
 	RootCACertificateFile types.String `tfsdk:"root_ca_certificate_file"`
+
+	AssumeRole *assumeRoleModel `tfsdk:"assume_role"`
 }
 
-// RadosgwClient holds both admin and S3 clients
+// assumeRoleModel is the provider's assume_role block — static credentials are
+// exchanged for temporary ones via STS AssumeRole before building the clients.
+type assumeRoleModel struct {
+	RoleARN     types.String `tfsdk:"role_arn"`
+	SessionName types.String `tfsdk:"session_name"`
+	Policy      types.String `tfsdk:"policy"`
+	Duration    types.String `tfsdk:"duration"`
+}
+
+// assumeRoleHasUnknown reports whether any assume_role attribute is unknown at
+// plan time (e.g. role_arn sourced from a resource created in the same apply),
+// so client creation can be deferred to apply like the top-level credentials.
+func assumeRoleHasUnknown(m *assumeRoleModel) bool {
+	if m == nil {
+		return false
+	}
+	return m.RoleARN.IsUnknown() ||
+		m.SessionName.IsUnknown() ||
+		m.Policy.IsUnknown() ||
+		m.Duration.IsUnknown()
+}
+
+// RadosgwClient holds the admin and S3 clients plus the effective credentials
+// used to build per-resource IAM/STS clients. When the provider assumes a role,
+// these are the temporary credentials (AccessKey/SecretKey/SessionToken).
 type RadosgwClient struct {
 	Admin *admin.API
 	S3    *s3.Client
+
+	Endpoint     string
+	AccessKey    string
+	SecretKey    string
+	SessionToken string
+	HTTPClient   HTTPClient
 }
 
 func (p *RadosgwProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -108,6 +142,34 @@ radosgw-admin caps add --uid=admin --caps="accounts=*;buckets=*;metadata=*;oidc-
 				Optional:            true,
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"assume_role": schema.SingleNestedBlock{
+				MarkdownDescription: "Assume an IAM role (STS `AssumeRole`) using the configured `access_key`/`secret_key`, and use the resulting temporary credentials for all subsequent calls. " +
+					"The static credentials must be allowed to assume the role, and the role's trust policy must permit them. " +
+					"`role_arn` accepts both the non-account form (`arn:aws:iam:::role/<name>`) and the account-scoped form (`arn:aws:iam::<account-id>:role/<name>`).\n\n" +
+					"~> **Note:** Assumed-role (temporary) credentials carry a session token, which the S3 and IAM/STS APIs honor. The Admin Ops API cannot use a session token, so Admin-API-backed data (e.g. `num_shards`, `bucket_quota`, and the `radosgw_iam_user`/account-bootstrap resources) is unavailable under an assumed role — the same behavior as a user without admin capabilities. Use assumed-role credentials for S3 and IAM role/policy/OIDC resources.\n\n" +
+					"~> **Note:** RadosGW does not support an external ID — a role whose trust policy includes an `sts:ExternalId` condition cannot be assumed — so there is no `external_id` argument.",
+				Attributes: map[string]schema.Attribute{
+					"role_arn": schema.StringAttribute{
+						MarkdownDescription: "ARN of the IAM role to assume, e.g. `arn:aws:iam:::role/my-role`.",
+						Optional:            true,
+					},
+					"session_name": schema.StringAttribute{
+						MarkdownDescription: "Session name to use when assuming the role. Defaults to `terraform`.",
+						Optional:            true,
+					},
+					"policy": schema.StringAttribute{
+						MarkdownDescription: "An IAM policy document (JSON) applied as a session policy to further restrict the assumed-role session. " +
+							"**Note:** on RadosGW only explicit `Deny` statements are enforced — AWS-style scope-down via an allow-only policy (implicit deny of anything not listed) is **not** applied, so use explicit `Deny` statements to restrict a session.",
+						Optional: true,
+					},
+					"duration": schema.StringAttribute{
+						MarkdownDescription: "Lifetime of the assumed-role session, as a Go duration string (e.g. `1h`, `30m`). Defaults to `1h`. Subject to the role's maximum session duration.",
+						Optional:            true,
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -134,7 +196,8 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 		config.SecretKey.IsUnknown() ||
 		config.TLSInsecureSkipVerify.IsUnknown() ||
 		config.RootCACertificate.IsUnknown() ||
-		config.RootCACertificateFile.IsUnknown() {
+		config.RootCACertificateFile.IsUnknown() ||
+		assumeRoleHasUnknown(config.AssumeRole) {
 		tflog.Debug(ctx, "Deferring RadosGW client creation: provider configuration has unknown values at plan time")
 		return
 	}
@@ -266,8 +329,62 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 		Transport: httpTransport,
 	}
 
-	// Create Admin API client
-	adminClient, err := admin.New(endpoint, accessKey, secretKey, httpClient)
+	// Effective credentials: the static ones by default, or temporary
+	// (assumed-role) credentials when an assume_role block is configured.
+	effAccessKey, effSecretKey, effSessionToken := accessKey, secretKey, ""
+
+	if config.AssumeRole != nil {
+		roleARN := config.AssumeRole.RoleARN.ValueString()
+		if roleARN == "" {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("assume_role").AtName("role_arn"),
+				"Missing Role ARN",
+				"The assume_role block is set but role_arn is empty. Set role_arn to the ARN of the role to assume.",
+			)
+			return
+		}
+
+		durationSeconds := 3600
+		if d := config.AssumeRole.Duration.ValueString(); d != "" {
+			parsed, perr := time.ParseDuration(d)
+			if perr != nil {
+				resp.Diagnostics.AddAttributeError(
+					path.Root("assume_role").AtName("duration"),
+					"Invalid Assume Role Duration",
+					fmt.Sprintf("Could not parse duration %q: %s. Use a Go duration string such as \"1h\" or \"30m\".", d, perr.Error()),
+				)
+				return
+			}
+			durationSeconds = int(parsed.Seconds())
+		}
+
+		sessionName := config.AssumeRole.SessionName.ValueString()
+		if sessionName == "" {
+			sessionName = "terraform"
+		}
+
+		baseIAM := NewIAMClient(endpoint, accessKey, secretKey, "", httpClient)
+		creds, aerr := assumeRole(ctx, baseIAM, assumeRoleParams{
+			RoleARN:         roleARN,
+			RoleSessionName: sessionName,
+			Policy:          config.AssumeRole.Policy.ValueString(),
+			DurationSeconds: durationSeconds,
+		})
+		if aerr != nil {
+			resp.Diagnostics.AddError(
+				"Unable to Assume Role",
+				fmt.Sprintf("Could not assume role %s: %s", roleARN, aerr.Error()),
+			)
+			return
+		}
+		effAccessKey, effSecretKey, effSessionToken = creds.AccessKeyID, creds.SecretAccessKey, creds.SessionToken
+		tflog.Info(ctx, "Assumed role for RadosGW provider", map[string]any{"role_arn": roleARN})
+	}
+
+	// Create Admin API client. Note: the Admin Ops API does not support a session
+	// token, so under assumed-role credentials admin calls fail and admin-backed
+	// resources fall back to their S3-only behavior (admin-only fields null).
+	adminClient, err := admin.New(endpoint, effAccessKey, effSecretKey, httpClient)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create RadosGW Admin API Client",
@@ -281,7 +398,7 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 	// Create S3 client with custom endpoint and HTTP client
 	s3Client := s3.NewFromConfig(aws.Config{
 		Region:      "default",
-		Credentials: credentials.NewStaticCredentialsProvider(accessKey, secretKey, ""),
+		Credentials: credentials.NewStaticCredentialsProvider(effAccessKey, effSecretKey, effSessionToken),
 		HTTPClient:  httpClient,
 	}, func(o *s3.Options) {
 		o.BaseEndpoint = &endpoint
@@ -289,8 +406,13 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 	})
 
 	client := &RadosgwClient{
-		Admin: adminClient,
-		S3:    s3Client,
+		Admin:        adminClient,
+		S3:           s3Client,
+		Endpoint:     endpoint,
+		AccessKey:    effAccessKey,
+		SecretKey:    effSecretKey,
+		SessionToken: effSessionToken,
+		HTTPClient:   httpClient,
 	}
 
 	resp.DataSourceData = client

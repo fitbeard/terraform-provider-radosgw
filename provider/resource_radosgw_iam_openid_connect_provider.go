@@ -210,12 +210,7 @@ func (r *OIDCProviderResource) Configure(ctx context.Context, req resource.Confi
 
 	r.client = client
 	// Create IAM client using the same credentials and endpoint
-	r.iamClient = NewIAMClient(
-		client.Admin.Endpoint,
-		client.Admin.AccessKey,
-		client.Admin.SecretKey,
-		client.Admin.HTTPClient,
-	)
+	r.iamClient = newAccountIAMClient(client)
 }
 
 func (r *OIDCProviderResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

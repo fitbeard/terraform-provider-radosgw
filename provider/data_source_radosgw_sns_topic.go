@@ -155,12 +155,7 @@ func (d *SNSTopicDataSource) Configure(ctx context.Context, req datasource.Confi
 	}
 
 	d.client = client
-	d.iamClient = NewIAMClient(
-		client.Admin.Endpoint,
-		client.Admin.AccessKey,
-		client.Admin.SecretKey,
-		client.Admin.HTTPClient,
-	)
+	d.iamClient = newAccountIAMClient(client)
 }
 
 func (d *SNSTopicDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {

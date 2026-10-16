@@ -191,24 +191,28 @@ type HTTPClient interface {
 // This client uses AWS SigV4 signing and can be used for OIDC providers,
 // roles, policies, and other IAM-like operations supported by RadosGW.
 type IAMClient struct {
-	Endpoint   string
-	AccessKey  string
-	SecretKey  string
-	HTTPClient HTTPClient
-	Signer     *v4.Signer
+	Endpoint     string
+	AccessKey    string
+	SecretKey    string
+	SessionToken string
+	HTTPClient   HTTPClient
+	Signer       *v4.Signer
 }
 
-// NewIAMClient creates a new IAM client for RadosGW.
-func NewIAMClient(endpoint, accessKey, secretKey string, httpClient HTTPClient) *IAMClient {
+// NewIAMClient creates a new IAM client for RadosGW. sessionToken is the STS
+// session token when the provider authenticates with temporary (assumed-role)
+// credentials, or "" for static credentials.
+func NewIAMClient(endpoint, accessKey, secretKey, sessionToken string, httpClient HTTPClient) *IAMClient {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
 	return &IAMClient{
-		Endpoint:   endpoint,
-		AccessKey:  accessKey,
-		SecretKey:  secretKey,
-		HTTPClient: httpClient,
-		Signer:     v4.NewSigner(),
+		Endpoint:     endpoint,
+		AccessKey:    accessKey,
+		SecretKey:    secretKey,
+		SessionToken: sessionToken,
+		HTTPClient:   httpClient,
+		Signer:       v4.NewSigner(),
 	}
 }
 
@@ -239,6 +243,7 @@ func (c *IAMClient) DoRequest(ctx context.Context, params url.Values, service st
 	credentials := aws.Credentials{
 		AccessKeyID:     c.AccessKey,
 		SecretAccessKey: c.SecretKey,
+		SessionToken:    c.SessionToken,
 	}
 
 	// Sign the request using AWS SDK v4 signer
@@ -392,6 +397,7 @@ func (c *IAMClient) DoPostRequest(ctx context.Context, params url.Values, servic
 	credentials := aws.Credentials{
 		AccessKeyID:     c.AccessKey,
 		SecretAccessKey: c.SecretKey,
+		SessionToken:    c.SessionToken,
 	}
 
 	payloadHash := HashPayload([]byte(encodedBody))
