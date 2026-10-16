@@ -70,7 +70,8 @@ func TestAccSTSAssumeRoleAccountARN(t *testing.T) {
 	trust := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"arn:aws:iam::%s:root"},"Action":"sts:AssumeRole"}]}`, ar.accountID)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		// Accounts require Ceph Squid or newer (not available on Reef).
+		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy: func(s *terraform.State) error {
 			_ = testAccDeleteRoleFixture(testAccIAMClientWithCreds(ar.accessKey, ar.secretKey), roleName)
