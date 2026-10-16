@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.7.1...v1.8.0) (2026-10-16)
+
+
+### Features
+
+* provider authentication via assume_role and assume_role_with_web_identity ([#143](https://github.com/fitbeard/terraform-provider-radosgw/issues/143)) ([446019d](https://github.com/fitbeard/terraform-provider-radosgw/commit/446019d64543d67671cf31ea5de07e2db0cf6857))
+
 ## [1.7.1](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.7.0...v1.7.1) (2026-10-14)
 
 
