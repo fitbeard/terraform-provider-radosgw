@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.8.0...v1.9.0) (2026-10-22)
+
+
+### Features
+
+* add radosgw_s3_bucket_rate_limit resource and datasource ([#148](https://github.com/fitbeard/terraform-provider-radosgw/issues/148)) ([93a2336](https://github.com/fitbeard/terraform-provider-radosgw/commit/93a2336b4ad7551e827da234bbfee6dc6458740c))
+
+
+### Miscellaneous
+
+* **deps:** Bump the aws-sdk group with 3 updates ([#145](https://github.com/fitbeard/terraform-provider-radosgw/issues/145)) ([8f1da91](https://github.com/fitbeard/terraform-provider-radosgw/commit/8f1da9183e83048160e237560a2933353e7e4f31))
+* refresh all dependencies including go version ([#147](https://github.com/fitbeard/terraform-provider-radosgw/issues/147)) ([2846c20](https://github.com/fitbeard/terraform-provider-radosgw/commit/2846c20e6c0def8a89fc24f2621c45746a7b9e69))
+
 ## [1.8.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.7.1...v1.8.0) (2026-10-16)
 
 
