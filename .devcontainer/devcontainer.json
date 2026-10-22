@@ -8,20 +8,20 @@
   },
   "features": {
     "ghcr.io/devcontainers/features/aws-cli:1": {
-      "version": "2.32.28"
+      "version": "2.38.4"
     },
     "ghcr.io/devcontainers/features/go:1": {
-      "version": "1.26.5",
-      "golangciLintVersion": "2.12.2"
+      "version": "1.27.3",
+      "golangciLintVersion": "2.15.0"
     },
     "ghcr.io/devcontainers-extra/features/gh-cli:1": {
-      "version": "2.96.0"
+      "version": "2.103.0"
     },
     "ghcr.io/devcontainers-extra/features/opentofu:1": {
-      "version": "1.11.13"
+      "version": "1.13.2"
     },
     "ghcr.io/devcontainers-extra/features/terraform-asdf:2": {
-      "version": "1.15.8"
+      "version": "1.16.7"
     },
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
       "moby": false
