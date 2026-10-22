@@ -129,6 +129,7 @@ The RadosGW user configured in this provider requires specific capabilities to m
 | ` + "`accounts=*`" + ` | ` + "`radosgw_iam_account`" + ` (and the ` + "`account_id`" + `/` + "`account_root`" + ` attributes of ` + "`radosgw_iam_user`" + `) |
 | ` + "`users=*`" + ` |` + "`radosgw_iam_user`" + `, ` + "`radosgw_iam_subuser`" + `, ` + "`radosgw_iam_access_key`" + `, ` + "`radosgw_iam_user_caps`" + `, ` + "`radosgw_iam_quota`" + `, ` + "`radosgw_iam_user`" + `, ` + "`radosgw_iam_users`" + ` |
 | ` + "`buckets=*`" + ` | ` + "`radosgw_s3_bucket_link`" + `; ` + "`radosgw_s3_bucket`" + ` (only for the Admin-API metadata — it falls back to the S3 API without this cap) |
+| ` + "`ratelimit=*`" + ` | ` + "`radosgw_s3_bucket_rate_limit`" + ` |
 | ` + "`oidc-provider=*`" + ` | ` + "`radosgw_iam_openid_connect_provider`" + ` |
 | ` + "`roles=*`" + ` | ` + "`radosgw_iam_role`" + `, ` + "`radosgw_iam_role_policy`" + `, ` + "`radosgw_iam_roles`" + ` |
 | ` + "`metadata=*`" + ` | ` + "`radosgw_iam_users`" + ` |
@@ -136,7 +137,7 @@ The RadosGW user configured in this provider requires specific capabilities to m
 To grant all capabilities to a user:
 
 ` + "```bash" + `
-radosgw-admin caps add --uid=admin --caps="accounts=*;buckets=*;metadata=*;oidc-provider=*;roles=*;users=*"
+radosgw-admin caps add --uid=admin --caps="accounts=*;buckets=*;metadata=*;oidc-provider=*;roles=*;users=*;ratelimit=*"
 ` + "```" + `
 
 ~> **These capabilities authorize the Admin Ops API and are cluster-wide** (not scoped to a tenant or account). The S3 bucket sub-resources (` + "`radosgw_s3_bucket_acl`" + `, ` + "`radosgw_s3_bucket_policy`" + `, ` + "`radosgw_s3_bucket_notification`" + `, ` + "`radosgw_s3_bucket_lifecycle_configuration`" + `, ` + "`radosgw_s3_bucket_website_configuration`" + `) and the IAM/STS resources (` + "`radosgw_iam_role`" + `, ` + "`radosgw_iam_role_policy`" + `, ` + "`radosgw_iam_openid_connect_provider`" + `, ` + "`radosgw_sns_topic`" + `) use the S3/IAM APIs directly and need **no** admin capability — they work with the configured user's own S3/IAM permissions.
@@ -634,6 +635,7 @@ func (p *RadosgwProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewS3BucketLifecycleResource,
 		NewS3BucketWebsiteConfigurationResource,
 		NewS3BucketCorsConfigurationResource,
+		NewS3BucketRateLimitResource,
 		NewSNSTopicResource,
 		NewSNSTopicPolicyResource,
 	}
@@ -658,6 +660,7 @@ func (p *RadosgwProvider) DataSources(ctx context.Context) []func() datasource.D
 		NewIAMQuotaDataSource,
 		NewS3BucketDataSource,
 		NewS3BucketPolicyDataSource,
+		NewS3BucketRateLimitDataSource,
 		NewSNSTopicDataSource,
 	}
 }

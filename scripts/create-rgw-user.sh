@@ -30,7 +30,7 @@ case "$(echo "${detected_version:-0}" | tr '[:upper:]' '[:lower:]')" in
 esac
 
 # accounts=* is only supported on Squid (19.x) and later; Reef (18.x) rejects it.
-CAPS="buckets=*;metadata=*;oidc-provider=*;roles=*;users=*"
+CAPS="buckets=*;metadata=*;oidc-provider=*;roles=*;users=*;ratelimit=*"
 if [[ "${normalized_version}" -ge 19 ]]; then
     CAPS="accounts=*;${CAPS}"
 fi
