@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.9.0...v1.9.1) (2026-11-01)
+
+
+### Miscellaneous
+
+* **deps:** Bump the aws-sdk group with 3 updates ([#150](https://github.com/fitbeard/terraform-provider-radosgw/issues/150)) ([994192d](https://github.com/fitbeard/terraform-provider-radosgw/commit/994192d175bb39a81dcec37713249f6402e3b86d))
+
 ## [1.9.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.8.0...v1.9.0) (2026-10-22)
 
 
