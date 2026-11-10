@@ -4,7 +4,6 @@ page_title: "RadosGW: radosgw_iam_subusers"
 description: |-
   Retrieves information about subusers associated with a RadosGW user.
   Subusers are additional identities under a parent user, typically used for Swift API access. Each subuser has a full ID in the format {user_id}:{subuser_name}.
-  ~> Note: Listing multiple subusers per user requires Ceph Squid (19.x) or higher. Older versions (Reef 18.x) may have issues when multiple subusers exist.
 ---
 
 # radosgw_iam_subusers
@@ -12,8 +11,6 @@ description: |-
 Retrieves information about subusers associated with a RadosGW user.
 
 Subusers are additional identities under a parent user, typically used for Swift API access. Each subuser has a full ID in the format `{user_id}:{subuser_name}`.
-
-~> **Note:** Listing multiple subusers per user requires Ceph Squid (19.x) or higher. Older versions (Reef 18.x) may have issues when multiple subusers exist.
 
 ## Example Usage
 

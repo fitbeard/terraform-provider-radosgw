@@ -23,7 +23,7 @@ func TestAccRadosgwIAMAccountPoliciesAndGroups(t *testing.T) {
 	fullAccess := "arn:aws:iam::aws:policy/AmazonS3FullAccess"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             ar.destroy,
 		Steps: []resource.TestStep{

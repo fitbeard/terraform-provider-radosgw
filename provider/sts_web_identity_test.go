@@ -30,7 +30,7 @@ import (
 // creates the OIDC provider + role (no import/update), so the in-place-update
 // limitation that gates the OIDC provider resource test to Tentacle does not
 // apply. The provider is created with allow_updates = false as a safety belt so
-// no in-place update API is ever reached on Reef/Squid.
+// no in-place update API is ever reached on Squid.
 func TestAccSTSAssumeRoleWithWebIdentity(t *testing.T) {
 	t.Parallel()
 
@@ -65,7 +65,7 @@ resource "radosgw_iam_openid_connect_provider" "idp" {
   client_id_list = ["test-client"]
 
   # Force replace-on-change instead of in-place updates, which are unsupported on
-  # Reef/Squid. Not exercised here (single create), but keeps the test safe on all
+  # Squid. Not exercised here (single create), but keeps the test safe on all
   # releases.
   allow_updates = false
 

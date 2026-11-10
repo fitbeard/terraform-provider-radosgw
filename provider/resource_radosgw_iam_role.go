@@ -145,10 +145,8 @@ func (r *RoleResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				},
 			},
 			"description": schema.StringAttribute{
-				MarkdownDescription: "A description of the role. Maximum 1000 characters. " +
-					"~> **Note:** This field is stored in state but may not be returned by the RadosGW API on older Ceph versions (Reef 18.x). " +
-					"The provider preserves the configured value in this case.",
-				Optional: true,
+				MarkdownDescription: "A description of the role. Maximum 1000 characters.",
+				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.LengthAtMost(1000),
 				},
@@ -319,9 +317,6 @@ func (r *RoleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		return
 	}
 
-	// Preserve the current description from state - older Ceph versions (Reef)
-	// don't return this field in the API response
-	currentDescription := state.Description
 	currentTags := state.Tags
 
 	params := url.Values{}
@@ -361,12 +356,8 @@ func (r *RoleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	state.Path = types.StringValue(role.Path)
 	state.MaxSessionDuration = types.Int64Value(role.MaxSessionDuration)
 
-	// Handle description field - older Ceph versions (Reef 18.x) don't return it
 	if role.Description != "" {
 		state.Description = types.StringValue(role.Description)
-	} else if !currentDescription.IsNull() {
-		// Preserve state value if API didn't return it (Reef compatibility)
-		state.Description = currentDescription
 	} else {
 		state.Description = types.StringNull()
 	}

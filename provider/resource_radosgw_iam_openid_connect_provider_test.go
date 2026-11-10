@@ -20,7 +20,7 @@ func TestAccRadosgwIAMOIDCProvider_basic(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		// The import step triggers an update (allow_updates defaults to true after import)
-		// which calls APIs unsupported on Reef/Squid, causing hangs.
+		// which calls APIs unsupported on Squid, causing hangs.
 		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Tentacle) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMOIDCProviderDestroy,
@@ -75,7 +75,7 @@ func TestAccRadosgwIAMOIDCProvider_allowUpdatesTrue(t *testing.T) {
 	providerURL := fmt.Sprintf("https://%s-update.example.com", suffix)
 
 	resource.Test(t, resource.TestCase{
-		// allow_updates=true enables in-place update APIs unsupported on Reef/Squid
+		// allow_updates=true enables in-place update APIs unsupported on Squid
 		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Tentacle) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMOIDCProviderDestroy,

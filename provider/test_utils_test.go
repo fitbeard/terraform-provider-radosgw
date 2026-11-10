@@ -11,11 +11,6 @@ func TestCephVersionString(t *testing.T) {
 		want string
 	}{
 		{
-			name: "reef",
-			in:   CephVersion_Reef,
-			want: "Reef (18.x)",
-		},
-		{
 			name: "squid",
 			in:   CephVersion_Squid,
 			want: "Squid (19.x)",
@@ -24,6 +19,11 @@ func TestCephVersionString(t *testing.T) {
 			name: "tentacle",
 			in:   CephVersion_Tentacle,
 			want: "Tentacle (20.x)",
+		},
+		{
+			name: "umbrella",
+			in:   CephVersion_Umbrella,
+			want: "Umbrella (21.x)",
 		},
 		{
 			name: "unknown",
@@ -46,11 +46,11 @@ func TestCephVersionString(t *testing.T) {
 func TestCephVersionComparisons(t *testing.T) {
 	t.Parallel()
 
-	if !CephVersion_Reef.LessThan(CephVersion_Squid) {
-		t.Fatal("expected Reef to be less than Squid")
+	if !CephVersion_Squid.LessThan(CephVersion_Tentacle) {
+		t.Fatal("expected Squid to be less than Tentacle")
 	}
-	if !CephVersion_Tentacle.GreaterThan(CephVersion_Squid) {
-		t.Fatal("expected Tentacle to be greater than Squid")
+	if !CephVersion_Umbrella.GreaterThan(CephVersion_Tentacle) {
+		t.Fatal("expected Umbrella to be greater than Tentacle")
 	}
 	if !CephVersion_Squid.GreaterThanOrEqual(CephVersion_Squid) {
 		t.Fatal("expected Squid to be greater than or equal to Squid")
@@ -85,8 +85,8 @@ func TestParseCephVersion(t *testing.T) {
 		},
 		{
 			name: "hyphenated version",
-			in:   "18-reef",
-			want: CephVersion_Reef,
+			in:   "21-umbrella",
+			want: CephVersion_Umbrella,
 		},
 		{
 			name: "unknown version",

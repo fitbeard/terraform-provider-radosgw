@@ -49,13 +49,13 @@ jobs:
     needs:
       - verify
       - unit-test
-    runs-on: ubuntu-22.04 # Ceph packages are only available for Jammy
+    runs-on: ubuntu-22.04 # Ceph 'Squid' release packages are only available for Jammy
     strategy:
       matrix:
         ceph-release:
+          - 'umbrella'
           - 'tentacle'
           - 'squid'
-          - 'reef'
       fail-fast: false
     concurrency:
       group: ${{ github.head_ref || github.run_id }}-${{ matrix.ceph-release }}
@@ -76,8 +76,6 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/ceph-archive-keyring.gpg] https://download.ceph.com/debian-${{ matrix.ceph-release }}/ jammy main" | sudo tee /etc/apt/sources.list.d/ceph.list
           sudo apt-get update
           sudo apt-get install -y ceph ceph-mgr-dashboard radosgw
-          # Workaround for https://tracker.ceph.com/issues/74199
-          sudo rm -fr /usr/share/ceph/mgr/dashboard/controllers/smb.py
       - run: make ci-setup
       - name: Verify OIDC provider (STS/WebIdentity fixture)
         run: |

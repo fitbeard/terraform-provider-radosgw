@@ -15,20 +15,20 @@ type CephVersion int
 // Ceph major releases (named versions).
 const (
 	CephVersion_Unknown  CephVersion = 0
-	CephVersion_Reef     CephVersion = 18 // Reef (18.x)
 	CephVersion_Squid    CephVersion = 19 // Squid (19.x)
 	CephVersion_Tentacle CephVersion = 20 // Tentacle (20.x)
+	CephVersion_Umbrella CephVersion = 21 // Umbrella (21.x)
 )
 
 // String returns the version name.
 func (v CephVersion) String() string {
 	switch v {
-	case CephVersion_Reef:
-		return "Reef (18.x)"
 	case CephVersion_Squid:
 		return "Squid (19.x)"
 	case CephVersion_Tentacle:
 		return "Tentacle (20.x)"
+	case CephVersion_Umbrella:
+		return "Umbrella (21.x)"
 	default:
 		return fmt.Sprintf("Unknown (%d.x)", int(v))
 	}
@@ -74,12 +74,12 @@ func parseCephVersion(version string) CephVersion {
 
 	// Check for named versions first
 	switch version {
-	case "reef":
-		return CephVersion_Reef
 	case "squid":
 		return CephVersion_Squid
 	case "tentacle":
 		return CephVersion_Tentacle
+	case "umbrella":
+		return CephVersion_Umbrella
 	}
 
 	// Handle versions like "20.1.0" or "20-tentacle" - extract major version

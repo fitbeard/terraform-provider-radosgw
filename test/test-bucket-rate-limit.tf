@@ -11,7 +11,7 @@
 #
 # NOTE: max_list_ops / max_delete_ops are Ceph 21+ and are intentionally NOT
 # managed here — the latest stable release is Tentacle (20). Only the four core
-# limits apply on Reef/Squid/Tentacle.
+# limits apply on Squid/Tentacle.
 #
 # Manual verification after `tofu apply` — read the limit back over the Admin API:
 #   radosgw-admin --conf /tmp/ceph-dev/ceph.conf ratelimit get \

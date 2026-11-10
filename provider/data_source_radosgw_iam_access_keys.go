@@ -51,9 +51,7 @@ func (d *AccessKeysDataSource) Schema(ctx context.Context, req datasource.Schema
 		MarkdownDescription: "Retrieves information about IAM access keys associated with the specified RadosGW user. " +
 			"Use this data source to get S3 and/or Swift access keys for a user.\n\n" +
 			"~> **Note:** The RadosGW API also returns `active` and `create_date` fields, but these are not yet " +
-			"exposed by the go-ceph library. They will be added in a future version when go-ceph supports them.\n\n" +
-			"~> **Note:** Listing multiple S3 keys per user requires Ceph Squid (19.x) or higher. " +
-			"Older versions (Reef 18.x) may have issues when multiple keys exist.",
+			"exposed by the go-ceph library. They will be added in a future version when go-ceph supports them.",
 
 		Attributes: map[string]schema.Attribute{
 			"user_id": schema.StringAttribute{

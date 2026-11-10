@@ -37,7 +37,7 @@ resource "radosgw_iam_openid_connect_provider" "sts_idp" {
   client_id_list = ["test-client"]
 
   # In-place updates of client_id_list/thumbprint_list are unsupported on
-  # Reef/Squid; allow_updates = false forces replace-on-change instead.
+  # Squid; allow_updates = false forces replace-on-change instead.
   allow_updates = false
 
   # RadosGW only verifies the thumbprint against the IdP certificate when the
