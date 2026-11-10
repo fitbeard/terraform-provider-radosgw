@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.0.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.9.0...v2.0.0) (2026-11-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* add provider ceph_version; gate version-dependent features ([#155](https://github.com/fitbeard/terraform-provider-radosgw/issues/155))
+
+### Features
+
+* add Ceph Umbrella (21.x) support and drop EOL Reef (18.x) ([#154](https://github.com/fitbeard/terraform-provider-radosgw/issues/154)) ([2f1648a](https://github.com/fitbeard/terraform-provider-radosgw/commit/2f1648a4d3597749ce680850b3f6a0c47b477cce))
+* add provider ceph_version; gate version-dependent features ([#155](https://github.com/fitbeard/terraform-provider-radosgw/issues/155)) ([9a9464c](https://github.com/fitbeard/terraform-provider-radosgw/commit/9a9464c641118bb69ace2deb5edfde375b6a6a5f))
+
+
+### Miscellaneous
+
+* **deps:** Bump the aws-sdk group with 3 updates ([#150](https://github.com/fitbeard/terraform-provider-radosgw/issues/150)) ([994192d](https://github.com/fitbeard/terraform-provider-radosgw/commit/994192d175bb39a81dcec37713249f6402e3b86d))
+* **deps:** Bump the aws-sdk group with 3 updates ([#152](https://github.com/fitbeard/terraform-provider-radosgw/issues/152)) ([16fe5c7](https://github.com/fitbeard/terraform-provider-radosgw/commit/16fe5c7f7f75dbf996dd4562a8110a8ca9f7b3f1))
+
 ## [1.9.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.8.0...v1.9.0) (2026-10-22)
 
 
