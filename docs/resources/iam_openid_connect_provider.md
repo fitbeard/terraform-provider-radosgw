@@ -26,9 +26,6 @@ resource "radosgw_iam_openid_connect_provider" "google" {
   thumbprint_list = [
     "1234567890abcdef1234567890abcdef12345678"
   ]
-
-  # Set to false to prevent updates after creation
-  allow_updates = false
 }
 
 # Create an OIDC provider for Keycloak
@@ -43,9 +40,6 @@ resource "radosgw_iam_openid_connect_provider" "keycloak" {
   thumbprint_list = [
     "abcdef1234567890abcdef1234567890abcdef12"
   ]
-
-  # Allow updates to client_ids and thumbprints
-  allow_updates = true
 }
 
 # Create an OIDC provider for AWS Cognito
@@ -70,11 +64,12 @@ The following arguments are supported:
 
 
 * `client_id_list` - (Required) List of client IDs (also known as audiences) that are allowed to authenticate with this provider. These values correspond to the `aud` claim in OIDC tokens.
+
+~> **Note:** In-place updates of this attribute require Ceph Tentacle (20.x) or higher. When the provider's `ceph_version` is Squid (19.x), changing it forces resource replacement.
 * `thumbprint_list` - (Required) List of certificate thumbprints for the OpenID Connect provider's IDP certificate(s). Each thumbprint is a hex-encoded SHA-1 hash (40 characters). A maximum of 5 thumbprints are allowed.
+
+~> **Note:** In-place updates of this attribute require Ceph Tentacle (20.x) or higher. When the provider's `ceph_version` is Squid (19.x), changing it forces resource replacement.
 * `url` - (Required) URL of the identity provider. This value corresponds to the `iss` claim in OIDC tokens. Must include the protocol (`http://` or `https://`). The full URL is stored and used when RadosGW contacts the OIDC provider, but the protocol is stripped when constructing the ARN.
-
-
-* `allow_updates` - (Optional) Whether to allow in-place updates for `client_id_list` and `thumbprint_list`. When `true` (default), changes will be applied in-place. When `false`, changes to these attributes will destroy and recreate the provider. ~> **Note:** In-place updates require Ceph Tentacle (20.x). On older versions, set to `false`.
 
 
 
@@ -87,7 +82,6 @@ The following attributes are exported:
 * `client_id_list` - See Argument Reference above.
 * `thumbprint_list` - See Argument Reference above.
 * `url` - See Argument Reference above.
-* `allow_updates` - See Argument Reference above.
 ## Import
 
 Import is supported using the following syntax:

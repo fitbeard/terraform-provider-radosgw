@@ -21,9 +21,6 @@ resource "radosgw_iam_openid_connect_provider" "test_keycloak" {
     "F7D7B3515DD0D319DD219A43A9EA727AD6065287",
     "F7D7B3515DD0D319DD219A43A9EA727AD6065288",
   ]
-
-  # Allow in-place updates (Ceph >= 20.2.0)
-  allow_updates = true
 }
 
 # =============================================================================

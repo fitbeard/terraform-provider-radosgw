@@ -36,6 +36,8 @@ type S3BucketRateLimitDataSourceModel struct {
 	MaxWriteOps   types.Int64 `tfsdk:"max_write_ops"`
 	MaxReadBytes  types.Int64 `tfsdk:"max_read_bytes"`
 	MaxWriteBytes types.Int64 `tfsdk:"max_write_bytes"`
+	MaxListOps    types.Int64 `tfsdk:"max_list_ops"`
+	MaxDeleteOps  types.Int64 `tfsdk:"max_delete_ops"`
 }
 
 func (d *S3BucketRateLimitDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -48,8 +50,8 @@ func (d *S3BucketRateLimitDataSource) Schema(ctx context.Context, req datasource
 			"(`ratelimit-scope=bucket`).\n\n" +
 			"~> **Admin capability required.** Reading a bucket rate limit requires the Admin Ops `ratelimit` " +
 			"capability (`ratelimit=read`). A user without it receives `AccessDenied`.\n\n" +
-			"~> **Ceph version:** `max_list_ops` and `max_delete_ops` were added in Ceph 21 and are not exposed yet " +
-			"(the latest stable release is Tentacle, 20).",
+			"~> **Ceph version:** `max_list_ops` and `max_delete_ops` require Ceph 21 (Umbrella); on older releases " +
+			"they read back as `0`.",
 
 		Attributes: map[string]schema.Attribute{
 			"bucket": schema.StringAttribute{
@@ -79,6 +81,14 @@ func (d *S3BucketRateLimitDataSource) Schema(ctx context.Context, req datasource
 			},
 			"max_write_bytes": schema.Int64Attribute{
 				MarkdownDescription: "Maximum write bytes per minute. `0` means the limit is disabled.",
+				Computed:            true,
+			},
+			"max_list_ops": schema.Int64Attribute{
+				MarkdownDescription: "Maximum bucket-listing operations per minute. `0` means the limit is disabled. Requires Ceph 21 (Umbrella).",
+				Computed:            true,
+			},
+			"max_delete_ops": schema.Int64Attribute{
+				MarkdownDescription: "Maximum delete operations per minute. `0` means the limit is disabled. Requires Ceph 21 (Umbrella).",
 				Computed:            true,
 			},
 		},
@@ -132,6 +142,8 @@ func (d *S3BucketRateLimitDataSource) Read(ctx context.Context, req datasource.R
 	config.MaxWriteOps = int64FromPtr(spec.MaxWriteOps)
 	config.MaxReadBytes = int64FromPtr(spec.MaxReadBytes)
 	config.MaxWriteBytes = int64FromPtr(spec.MaxWriteBytes)
+	config.MaxListOps = int64FromPtr(spec.MaxListOps)
+	config.MaxDeleteOps = int64FromPtr(spec.MaxDeleteOps)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }

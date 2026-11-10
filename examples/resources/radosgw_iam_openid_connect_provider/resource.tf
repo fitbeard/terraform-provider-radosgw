@@ -9,9 +9,6 @@ resource "radosgw_iam_openid_connect_provider" "google" {
   thumbprint_list = [
     "1234567890abcdef1234567890abcdef12345678"
   ]
-
-  # Set to false to prevent updates after creation
-  allow_updates = false
 }
 
 # Create an OIDC provider for Keycloak
@@ -26,9 +23,6 @@ resource "radosgw_iam_openid_connect_provider" "keycloak" {
   thumbprint_list = [
     "abcdef1234567890abcdef1234567890abcdef12"
   ]
-
-  # Allow updates to client_ids and thumbprints
-  allow_updates = true
 }
 
 # Create an OIDC provider for AWS Cognito

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
@@ -19,9 +20,7 @@ func TestAccRadosgwIAMOIDCProvider_basic(t *testing.T) {
 	providerARN := fmt.Sprintf("arn:aws:iam:::oidc-provider/%s-test.example.com", suffix)
 
 	resource.Test(t, resource.TestCase{
-		// The import step triggers an update (allow_updates defaults to true after import)
-		// which calls APIs unsupported on Squid, causing hangs.
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Tentacle) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMOIDCProviderDestroy,
 		Steps: []resource.TestStep{
@@ -33,12 +32,12 @@ func TestAccRadosgwIAMOIDCProvider_basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("radosgw_iam_openid_connect_provider.test", "arn"),
 				),
 			},
-			// Import test - by ARN
+			// Import test - by ARN. client_id_list/thumbprint_list are unchanged,
+			// so no update API is triggered (safe on all Ceph versions).
 			{
 				ResourceName:                         "radosgw_iam_openid_connect_provider.test",
 				ImportState:                          true,
 				ImportStateVerify:                    true,
-				ImportStateVerifyIgnore:              []string{"allow_updates"},
 				ImportStateId:                        providerARN,
 				ImportStateVerifyIdentifierAttribute: "arn",
 			},
@@ -68,32 +67,10 @@ func TestAccRadosgwIAMOIDCProvider_multipleClientIDs(t *testing.T) {
 	})
 }
 
-func TestAccRadosgwIAMOIDCProvider_allowUpdatesTrue(t *testing.T) {
-	t.Parallel()
-
-	suffix := randomName("oidc")
-	providerURL := fmt.Sprintf("https://%s-update.example.com", suffix)
-
-	resource.Test(t, resource.TestCase{
-		// allow_updates=true enables in-place update APIs unsupported on Squid
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Tentacle) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckRadosgwIAMOIDCProviderDestroy,
-		Steps: []resource.TestStep{
-			{
-				Config: testAccRadosgwIAMOIDCProviderConfig_allowUpdates(providerURL, true),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheckRadosgwIAMOIDCProviderExists("radosgw_iam_openid_connect_provider.test"),
-					resource.TestCheckResourceAttr("radosgw_iam_openid_connect_provider.test", "allow_updates", "true"),
-				),
-			},
-		},
-	})
-}
-
 // TestAccRadosgwIAMOIDCProvider_inPlaceUpdate tests in-place updates of client_id_list and thumbprint_list.
 // This requires Ceph Tentacle (20.x) which supports UpdateOpenIDConnectProviderThumbprint,
-// AddClientIDToOpenIDConnectProvider, and RemoveClientIDFromOpenIDConnectProvider APIs.
+// AddClientIDToOpenIDConnectProvider, and RemoveClientIDFromOpenIDConnectProvider APIs. The
+// provider's ceph_version defaults to the newest release (>= Tentacle), so updates are applied in place.
 func TestAccRadosgwIAMOIDCProvider_inPlaceUpdate(t *testing.T) {
 	t.Parallel()
 
@@ -114,21 +91,26 @@ func TestAccRadosgwIAMOIDCProvider_inPlaceUpdate(t *testing.T) {
 					resource.TestCheckResourceAttr("radosgw_iam_openid_connect_provider.test", "client_id_list.#", "1"),
 				),
 			},
-			// Update: add a client ID
+			// Update: add a client ID (in place)
 			{
 				Config: testAccRadosgwIAMOIDCProviderConfig_forUpdate(providerURL, []string{"client-1", "client-2"}, "1234567890abcdef1234567890abcdef12345678"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("radosgw_iam_openid_connect_provider.test", plancheck.ResourceActionUpdate),
+					},
+				},
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("radosgw_iam_openid_connect_provider.test", "client_id_list.#", "2"),
 				),
 			},
-			// Update: change thumbprint
+			// Update: change thumbprint (in place)
 			{
 				Config: testAccRadosgwIAMOIDCProviderConfig_forUpdate(providerURL, []string{"client-1", "client-2"}, "abcdef1234567890abcdef1234567890abcdef12"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("radosgw_iam_openid_connect_provider.test", "thumbprint_list.0", "abcdef1234567890abcdef1234567890abcdef12"),
 				),
 			},
-			// Update: remove a client ID
+			// Update: remove a client ID (in place)
 			{
 				Config: testAccRadosgwIAMOIDCProviderConfig_forUpdate(providerURL, []string{"client-2"}, "abcdef1234567890abcdef1234567890abcdef12"),
 				Check: resource.ComposeTestCheckFunc(
@@ -139,12 +121,15 @@ func TestAccRadosgwIAMOIDCProvider_inPlaceUpdate(t *testing.T) {
 	})
 }
 
-func TestAccRadosgwIAMOIDCProvider_allowUpdatesFalse(t *testing.T) {
+// TestAccRadosgwIAMOIDCProvider_squidForcesReplace verifies that when the provider's
+// ceph_version is Squid (19.x) — which lacks the in-place OIDC update APIs — a change
+// to client_id_list forces resource replacement instead of an in-place update. This
+// runs on any cluster because replacement (create) is supported everywhere.
+func TestAccRadosgwIAMOIDCProvider_squidForcesReplace(t *testing.T) {
 	t.Parallel()
 
 	suffix := randomName("oidc")
-	providerURL := fmt.Sprintf("https://%s-noupdate.example.com", suffix)
-	providerARN := fmt.Sprintf("arn:aws:iam:::oidc-provider/%s-noupdate.example.com", suffix)
+	providerURL := fmt.Sprintf("https://%s-squid.example.com", suffix)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -152,21 +137,22 @@ func TestAccRadosgwIAMOIDCProvider_allowUpdatesFalse(t *testing.T) {
 		CheckDestroy:             testAccCheckRadosgwIAMOIDCProviderDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccRadosgwIAMOIDCProviderConfig_allowUpdates(providerURL, false),
+				Config: testAccRadosgwIAMOIDCProviderConfig_cephVersion(providerURL, []string{"client-1"}, "squid"),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckRadosgwIAMOIDCProviderExists("radosgw_iam_openid_connect_provider.test"),
-					resource.TestCheckResourceAttr("radosgw_iam_openid_connect_provider.test", "allow_updates", "false"),
+					resource.TestCheckResourceAttr("radosgw_iam_openid_connect_provider.test", "client_id_list.#", "1"),
 				),
 			},
-			// Import test - safe on all Ceph versions: client_id_list and thumbprint_list
-			// are unchanged after import, so no update API calls are triggered
 			{
-				ResourceName:                         "radosgw_iam_openid_connect_provider.test",
-				ImportState:                          true,
-				ImportStateVerify:                    true,
-				ImportStateVerifyIgnore:              []string{"allow_updates"},
-				ImportStateId:                        providerARN,
-				ImportStateVerifyIdentifierAttribute: "arn",
+				Config: testAccRadosgwIAMOIDCProviderConfig_cephVersion(providerURL, []string{"client-1", "client-2"}, "squid"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("radosgw_iam_openid_connect_provider.test", plancheck.ResourceActionReplace),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("radosgw_iam_openid_connect_provider.test", "client_id_list.#", "2"),
+				),
 			},
 		},
 	})
@@ -230,30 +216,15 @@ resource "radosgw_iam_openid_connect_provider" "test" {
 `, providerURL)
 }
 
-func testAccRadosgwIAMOIDCProviderConfig_allowUpdates(providerURL string, allowUpdates bool) string {
-	return providerConfig() + fmt.Sprintf(`
-resource "radosgw_iam_openid_connect_provider" "test" {
-  url = %q
-
-  client_id_list = ["test-client-id"]
-
-  thumbprint_list = [
-    "1234567890abcdef1234567890abcdef12345678"
-  ]
-
-  allow_updates = %t
-}
-`, providerURL, allowUpdates)
-}
-
-func testAccRadosgwIAMOIDCProviderConfig_forUpdate(providerURL string, clientIDs []string, thumbprint string) string {
-	// Build client_id_list as a quoted list
+func oidcClientIDListHCL(clientIDs []string) string {
 	quotedIDs := make([]string, len(clientIDs))
 	for i, id := range clientIDs {
 		quotedIDs[i] = fmt.Sprintf("%q", id)
 	}
-	clientIDList := "[" + strings.Join(quotedIDs, ", ") + "]"
+	return "[" + strings.Join(quotedIDs, ", ") + "]"
+}
 
+func testAccRadosgwIAMOIDCProviderConfig_forUpdate(providerURL string, clientIDs []string, thumbprint string) string {
 	return providerConfig() + fmt.Sprintf(`
 resource "radosgw_iam_openid_connect_provider" "test" {
   url = %q
@@ -261,8 +232,24 @@ resource "radosgw_iam_openid_connect_provider" "test" {
   client_id_list = %s
 
   thumbprint_list = [%q]
-
-  allow_updates = true
 }
-`, providerURL, clientIDList, thumbprint)
+`, providerURL, oidcClientIDListHCL(clientIDs), thumbprint)
+}
+
+func testAccRadosgwIAMOIDCProviderConfig_cephVersion(providerURL string, clientIDs []string, cephVersion string) string {
+	return fmt.Sprintf(`
+provider "radosgw" {
+  ceph_version = %q
+}
+
+resource "radosgw_iam_openid_connect_provider" "test" {
+  url = %q
+
+  client_id_list = %s
+
+  thumbprint_list = [
+    "1234567890abcdef1234567890abcdef12345678"
+  ]
+}
+`, cephVersion, providerURL, oidcClientIDListHCL(clientIDs))
 }

@@ -43,8 +43,6 @@
 # resource "radosgw_iam_openid_connect_provider" "wi" {
 #   url            = var.oidc_issuer
 #   client_id_list = ["test-client"]
-#   # In-place updates are unsupported on Squid; force replace-on-change.
-#   allow_updates = false
 #   # Placeholder: RadosGW only verifies the thumbprint when the JWKS exposes x5c.
 #   thumbprint_list = ["0000000000000000000000000000000000000000"]
 # }

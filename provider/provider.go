@@ -42,6 +42,7 @@ type RadosgwProviderModel struct {
 	TLSInsecureSkipVerify types.Bool   `tfsdk:"tls_insecure_skip_verify"`
 	RootCACertificate     types.String `tfsdk:"root_ca_certificate"`
 	RootCACertificateFile types.String `tfsdk:"root_ca_certificate_file"`
+	CephVersion           types.String `tfsdk:"ceph_version"`
 
 	AssumeRole                *assumeRoleModel                `tfsdk:"assume_role"`
 	AssumeRoleWithWebIdentity *assumeRoleWithWebIdentityModel `tfsdk:"assume_role_with_web_identity"`
@@ -109,6 +110,12 @@ type RadosgwClient struct {
 	SecretKey    string
 	SessionToken string
 	HTTPClient   HTTPClient
+
+	// CephVersion is the effective major Ceph release the provider targets, used
+	// to gate version-dependent behavior (e.g. OIDC in-place updates, bucket
+	// rate-limit list/delete ops). It defaults to the newest known release when
+	// the ceph_version attribute is not set.
+	CephVersion CephVersion
 }
 
 func (p *RadosgwProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -173,6 +180,17 @@ radosgw-admin caps add --uid=admin --caps="accounts=*;buckets=*;metadata=*;oidc-
 			"root_ca_certificate_file": schema.StringAttribute{
 				MarkdownDescription: "Path to a PEM-encoded root CA certificate file to use for TLS verification. Can be set via the `RADOSGW_ROOT_CA_CERTIFICATE_FILE` environment variable.",
 				Optional:            true,
+			},
+			"ceph_version": schema.StringAttribute{
+				MarkdownDescription: "The Ceph release of the target cluster, used to gate version-dependent " +
+					"behavior. Accepts a codename (`squid`, `tentacle`, `umbrella`) or a version number " +
+					"(`19`, `20`, `21`, `21.2.0`). Can be set via the `RADOSGW_CEPH_VERSION` environment variable. " +
+					"When unset, the provider assumes the newest supported release (Umbrella, 21.x). Set this to your " +
+					"cluster's release when running an older one so the provider gates features correctly:\n\n" +
+					"- `radosgw_iam_openid_connect_provider`: in-place updates of `client_id_list`/`thumbprint_list` " +
+					"require Tentacle (20.x); on Squid (19.x) changes force resource replacement.\n" +
+					"- `radosgw_s3_bucket_rate_limit`: `max_list_ops`/`max_delete_ops` require Umbrella (21.x).",
+				Optional: true,
 			},
 		},
 		Blocks: map[string]schema.Block{
@@ -266,6 +284,7 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 		config.TLSInsecureSkipVerify.IsUnknown() ||
 		config.RootCACertificate.IsUnknown() ||
 		config.RootCACertificateFile.IsUnknown() ||
+		config.CephVersion.IsUnknown() ||
 		assumeRoleHasUnknown(config.AssumeRole) ||
 		assumeRoleWithWebIdentityHasUnknown(config.AssumeRoleWithWebIdentity) {
 		tflog.Debug(ctx, "Deferring RadosGW client creation: provider configuration has unknown values at plan time")
@@ -279,6 +298,7 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 	tlsInsecureSkipVerify := os.Getenv("RADOSGW_TLS_INSECURE_SKIP_VERIFY") == "true"
 	rootCACertificate := os.Getenv("RADOSGW_ROOT_CA_CERTIFICATE")
 	rootCACertificateFile := os.Getenv("RADOSGW_ROOT_CA_CERTIFICATE_FILE")
+	cephVersionStr := os.Getenv("RADOSGW_CEPH_VERSION")
 
 	// Override with config values if provided
 	if !config.Endpoint.IsNull() {
@@ -298,6 +318,25 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 	if !config.RootCACertificateFile.IsNull() {
 		rootCACertificateFile = config.RootCACertificateFile.ValueString()
+	}
+	if !config.CephVersion.IsNull() {
+		cephVersionStr = config.CephVersion.ValueString()
+	}
+
+	// Resolve the effective Ceph version. Unset => assume the newest known release.
+	// Only the supported releases (Squid 19.x and later) are accepted.
+	cephVersion := cephVersionNewest
+	if cephVersionStr != "" {
+		cephVersion = parseCephVersion(cephVersionStr)
+		if cephVersion.LessThan(CephVersion_Squid) {
+			resp.Diagnostics.AddError(
+				"Invalid ceph_version",
+				fmt.Sprintf("Unsupported ceph_version %q. Supported releases are Squid (19.x), Tentacle (20.x), and "+
+					"Umbrella (21.x); accepted values are a codename (squid/tentacle/umbrella) or a version number "+
+					"(e.g. 19, 20, 21, 21.2.0).", cephVersionStr),
+			)
+			return
+		}
 	}
 
 	// assume_role and assume_role_with_web_identity are mutually exclusive.
@@ -597,6 +636,7 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 		SecretKey:    effSecretKey,
 		SessionToken: effSessionToken,
 		HTTPClient:   httpClient,
+		CephVersion:  cephVersion,
 	}
 
 	resp.DataSourceData = client
