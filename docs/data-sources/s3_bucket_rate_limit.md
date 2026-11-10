@@ -4,7 +4,7 @@ page_title: "RadosGW: radosgw_s3_bucket_rate_limit"
 description: |-
   Retrieves the rate limit configured for an S3 bucket in RadosGW via the Admin Ops API (ratelimit-scope=bucket).
   ~> Admin capability required. Reading a bucket rate limit requires the Admin Ops ratelimit capability (ratelimit=read). A user without it receives AccessDenied.
-  ~> Ceph version: max_list_ops and max_delete_ops were added in Ceph 21 and are not exposed yet (the latest stable release is Tentacle, 20).
+  ~> Ceph version: max_list_ops and max_delete_ops require Ceph 21 (Umbrella); on older releases they read back as 0.
 ---
 
 # radosgw_s3_bucket_rate_limit
@@ -13,7 +13,7 @@ Retrieves the rate limit configured for an S3 bucket in RadosGW via the Admin Op
 
 ~> **Admin capability required.** Reading a bucket rate limit requires the Admin Ops `ratelimit` capability (`ratelimit=read`). A user without it receives `AccessDenied`.
 
-~> **Ceph version:** `max_list_ops` and `max_delete_ops` were added in Ceph 21 and are not exposed yet (the latest stable release is Tentacle, 20).
+~> **Ceph version:** `max_list_ops` and `max_delete_ops` require Ceph 21 (Umbrella); on older releases they read back as `0`.
 
 ## Example Usage
 
@@ -54,6 +54,8 @@ The following arguments are supported:
 The following attributes are exported:
 
 * `enabled` - Whether the rate limit is enabled for the bucket.
+* `max_delete_ops` - Maximum delete operations per minute. `0` means the limit is disabled. Requires Ceph 21 (Umbrella).
+* `max_list_ops` - Maximum bucket-listing operations per minute. `0` means the limit is disabled. Requires Ceph 21 (Umbrella).
 * `max_read_bytes` - Maximum read bytes per minute. `0` means the limit is disabled.
 * `max_read_ops` - Maximum read operations per minute. `0` means the limit is disabled.
 * `max_write_bytes` - Maximum write bytes per minute. `0` means the limit is disabled.

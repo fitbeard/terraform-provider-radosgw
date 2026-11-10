@@ -36,10 +36,6 @@ resource "radosgw_iam_openid_connect_provider" "sts_idp" {
   url            = var.sts_oidc_issuer
   client_id_list = ["test-client"]
 
-  # In-place updates of client_id_list/thumbprint_list are unsupported on
-  # Squid; allow_updates = false forces replace-on-change instead.
-  allow_updates = false
-
   # RadosGW only verifies the thumbprint against the IdP certificate when the
   # JWKS exposes x5c certificate chains; this provider's JWKS has none, so a
   # placeholder satisfies the IAM API (the JWT is still validated via the JWKS

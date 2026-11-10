@@ -210,6 +210,10 @@ This block can also be configured entirely via environment variables — `RADOSG
 ~> **Note:** When web identity is used, static credentials (`access_key`/`secret_key` and `RADOSGW_ACCESS_KEY`/`RADOSGW_SECRET_KEY`) are ignored.
 
 ~> **Note:** As with `assume_role`, the resulting temporary credentials cannot drive the Admin Ops API (no session token support), so Admin-API-backed data is unavailable — use them for S3 and IAM role/policy/OIDC resources. (see [below for nested schema](#nestedblock--assume_role_with_web_identity))
+- `ceph_version` (String) The Ceph release of the target cluster, used to gate version-dependent behavior. Accepts a codename (`squid`, `tentacle`, `umbrella`) or a version number (`19`, `20`, `21`, `21.2.0`). Can be set via the `RADOSGW_CEPH_VERSION` environment variable. When unset, the provider assumes the newest supported release (Umbrella, 21.x). Set this to your cluster's release when running an older one so the provider gates features correctly:
+
+- `radosgw_iam_openid_connect_provider`: in-place updates of `client_id_list`/`thumbprint_list` require Tentacle (20.x); on Squid (19.x) changes force resource replacement.
+- `radosgw_s3_bucket_rate_limit`: `max_list_ops`/`max_delete_ops` require Umbrella (21.x).
 - `endpoint` (String) RadosGW endpoint URL. Can be set via the `RADOSGW_ENDPOINT` environment variable.
 - `root_ca_certificate` (String) PEM-encoded root CA certificate content to use for TLS verification. Can be set via the `RADOSGW_ROOT_CA_CERTIFICATE` environment variable.
 - `root_ca_certificate_file` (String) Path to a PEM-encoded root CA certificate file to use for TLS verification. Can be set via the `RADOSGW_ROOT_CA_CERTIFICATE_FILE` environment variable.

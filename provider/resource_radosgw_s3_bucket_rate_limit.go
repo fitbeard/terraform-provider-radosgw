@@ -24,6 +24,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &S3BucketRateLimitResource{}
 var _ resource.ResourceWithImportState = &S3BucketRateLimitResource{}
+var _ resource.ResourceWithModifyPlan = &S3BucketRateLimitResource{}
 
 func NewS3BucketRateLimitResource() resource.Resource {
 	return &S3BucketRateLimitResource{}
@@ -39,9 +40,8 @@ type S3BucketRateLimitResource struct {
 // =============================================================================
 
 // S3BucketRateLimitResourceModel represents a per-bucket rate limit managed via
-// the Admin Ops API. Only the fields supported on Ceph Squid/Tentacle (19-20)
-// are exposed; max-list-ops/max-delete-ops are Ceph 21+ (Umbrella) and are not
-// exposed yet.
+// the Admin Ops API. max_list_ops/max_delete_ops require Ceph 21 (Umbrella); the
+// provider's ceph_version gates them (see ModifyPlan).
 type S3BucketRateLimitResourceModel struct {
 	Bucket        types.String `tfsdk:"bucket"`
 	Tenant        types.String `tfsdk:"tenant"`
@@ -50,6 +50,8 @@ type S3BucketRateLimitResourceModel struct {
 	MaxWriteOps   types.Int64  `tfsdk:"max_write_ops"`
 	MaxReadBytes  types.Int64  `tfsdk:"max_read_bytes"`
 	MaxWriteBytes types.Int64  `tfsdk:"max_write_bytes"`
+	MaxListOps    types.Int64  `tfsdk:"max_list_ops"`
+	MaxDeleteOps  types.Int64  `tfsdk:"max_delete_ops"`
 }
 
 // =============================================================================
@@ -71,9 +73,9 @@ func (r *S3BucketRateLimitResource) Schema(ctx context.Context, req resource.Sch
 			"without it receives `AccessDenied`. This capability is cluster-wide and independent of the `buckets` cap.\n\n" +
 			"~> **Note:** A bucket has a single rate-limit configuration. Declaring multiple " +
 			"`radosgw_s3_bucket_rate_limit` resources for the same bucket will cause them to overwrite each other.\n\n" +
-			"~> **Ceph version:** `max_list_ops` and `max_delete_ops` were added in Ceph 21 (Umbrella) and are not " +
-			"exposed by this resource yet. On Squid and Tentacle only `max_read_ops`, `max_write_ops`, `max_read_bytes`, " +
-			"and `max_write_bytes` apply.\n\n" +
+			"~> **Ceph version:** `max_list_ops` and `max_delete_ops` require Ceph 21 (Umbrella). They may only be set " +
+			"to a non-zero value when the provider's `ceph_version` is `21`/`umbrella` (or unset, which assumes the " +
+			"newest release); on Squid/Tentacle setting them is rejected at plan time.\n\n" +
 			"~> **Note:** When this resource is destroyed, the bucket's rate limit is disabled and its limits are reset to `0`.",
 
 		Attributes: map[string]schema.Attribute{
@@ -134,7 +136,71 @@ func (r *S3BucketRateLimitResource) Schema(ctx context.Context, req resource.Sch
 				},
 				Default: int64default.StaticInt64(0),
 			},
+			"max_list_ops": schema.Int64Attribute{
+				MarkdownDescription: "Maximum bucket-listing operations per minute. `0` disables this limit (the default). " +
+					"**Requires Ceph 21 (Umbrella)** — see the Ceph version note above.",
+				Optional: true,
+				Computed: true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(0),
+				},
+				Default: int64default.StaticInt64(0),
+			},
+			"max_delete_ops": schema.Int64Attribute{
+				MarkdownDescription: "Maximum delete operations per minute. `0` disables this limit (the default). " +
+					"**Requires Ceph 21 (Umbrella)** — see the Ceph version note above.",
+				Optional: true,
+				Computed: true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(0),
+				},
+				Default: int64default.StaticInt64(0),
+			},
 		},
+	}
+}
+
+// listDeleteOpsSupported reports whether the target Ceph release supports the
+// max_list_ops/max_delete_ops rate-limit settings (Umbrella 21.x and later).
+func (r *S3BucketRateLimitResource) listDeleteOpsSupported() bool {
+	return r.client != nil && r.client.CephVersion.GreaterThanOrEqual(CephVersion_Umbrella)
+}
+
+// ModifyPlan rejects max_list_ops/max_delete_ops on clusters older than Umbrella
+// (21.x), where RadosGW silently ignores them — turning what would otherwise be a
+// confusing "provider produced inconsistent result" into a clear plan-time error.
+func (r *S3BucketRateLimitResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Nothing to check on destroy, before the provider client is configured, or
+	// when the target release supports these fields.
+	if req.Plan.Raw.IsNull() || r.listDeleteOpsSupported() {
+		return
+	}
+
+	var plan S3BucketRateLimitResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	version := "the configured Ceph release"
+	if r.client != nil {
+		version = r.client.CephVersion.String()
+	}
+	if !plan.MaxListOps.IsNull() && !plan.MaxListOps.IsUnknown() && plan.MaxListOps.ValueInt64() != 0 {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("max_list_ops"),
+			"max_list_ops requires Ceph 21 (Umbrella)",
+			fmt.Sprintf("max_list_ops is only supported on Ceph 21 (Umbrella) or higher, but the provider targets %s. "+
+				"Set the provider `ceph_version` to `21`/`umbrella` on an Umbrella cluster to use it, or leave it at `0`.", version),
+		)
+	}
+	if !plan.MaxDeleteOps.IsNull() && !plan.MaxDeleteOps.IsUnknown() && plan.MaxDeleteOps.ValueInt64() != 0 {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("max_delete_ops"),
+			"max_delete_ops requires Ceph 21 (Umbrella)",
+			fmt.Sprintf("max_delete_ops is only supported on Ceph 21 (Umbrella) or higher, but the provider targets %s. "+
+				"Set the provider `ceph_version` to `21`/`umbrella` on an Umbrella cluster to use it, or leave it at `0`.", version),
+		)
 	}
 }
 
@@ -169,7 +235,7 @@ func (r *S3BucketRateLimitResource) Create(ctx context.Context, req resource.Cre
 
 	bucketID := rateLimitBucketID(plan.Tenant.ValueString(), plan.Bucket.ValueString())
 
-	spec := buildRateLimitSpec(bucketID, plan)
+	spec := buildRateLimitSpec(bucketID, plan, r.listDeleteOpsSupported())
 	if err := r.client.Admin.SetIndividualBucketRateLimit(ctx, spec); err != nil {
 		resp.Diagnostics.AddError(
 			"Error Setting Bucket Rate Limit",
@@ -226,7 +292,7 @@ func (r *S3BucketRateLimitResource) Update(ctx context.Context, req resource.Upd
 
 	bucketID := rateLimitBucketID(plan.Tenant.ValueString(), plan.Bucket.ValueString())
 
-	spec := buildRateLimitSpec(bucketID, plan)
+	spec := buildRateLimitSpec(bucketID, plan, r.listDeleteOpsSupported())
 	if err := r.client.Admin.SetIndividualBucketRateLimit(ctx, spec); err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating Bucket Rate Limit",
@@ -265,6 +331,11 @@ func (r *S3BucketRateLimitResource) Delete(ctx context.Context, req resource.Del
 		MaxWriteOps:   &zero,
 		MaxReadBytes:  &zero,
 		MaxWriteBytes: &zero,
+	}
+	// Only reset the Umbrella-only limits on a release that understands them.
+	if r.listDeleteOpsSupported() {
+		spec.MaxListOps = &zero
+		spec.MaxDeleteOps = &zero
 	}
 	if err := r.client.Admin.SetIndividualBucketRateLimit(ctx, spec); err != nil {
 		// If the bucket is already gone there is nothing to reset.
@@ -308,8 +379,10 @@ func rateLimitBucketID(tenant, bucket string) string {
 
 // buildRateLimitSpec maps the Terraform model to a go-ceph RateLimitSpec, sending
 // only the settings the configuration specifies (null/unknown fields are left out
-// so RadosGW keeps their current value).
-func buildRateLimitSpec(bucketID string, m S3BucketRateLimitResourceModel) admin.RateLimitSpec {
+// so RadosGW keeps their current value). The list/delete ops are sent only when
+// the target Ceph release supports them (Umbrella 21.x+); on older releases
+// RadosGW does not understand those params, so they are omitted entirely.
+func buildRateLimitSpec(bucketID string, m S3BucketRateLimitResourceModel, listDeleteSupported bool) admin.RateLimitSpec {
 	spec := admin.RateLimitSpec{Bucket: bucketID}
 	if !m.Enabled.IsNull() && !m.Enabled.IsUnknown() {
 		v := m.Enabled.ValueBool()
@@ -331,6 +404,16 @@ func buildRateLimitSpec(bucketID string, m S3BucketRateLimitResourceModel) admin
 		v := m.MaxWriteBytes.ValueInt64()
 		spec.MaxWriteBytes = &v
 	}
+	if listDeleteSupported {
+		if !m.MaxListOps.IsNull() && !m.MaxListOps.IsUnknown() {
+			v := m.MaxListOps.ValueInt64()
+			spec.MaxListOps = &v
+		}
+		if !m.MaxDeleteOps.IsNull() && !m.MaxDeleteOps.IsUnknown() {
+			v := m.MaxDeleteOps.ValueInt64()
+			spec.MaxDeleteOps = &v
+		}
+	}
 	return spec
 }
 
@@ -347,6 +430,10 @@ func flattenRateLimit(spec admin.RateLimitSpec, m *S3BucketRateLimitResourceMode
 	m.MaxWriteOps = int64FromPtr(spec.MaxWriteOps)
 	m.MaxReadBytes = int64FromPtr(spec.MaxReadBytes)
 	m.MaxWriteBytes = int64FromPtr(spec.MaxWriteBytes)
+	// On releases older than Umbrella these are absent from the response (nil),
+	// which maps to 0 — matching the schema default, so no drift.
+	m.MaxListOps = int64FromPtr(spec.MaxListOps)
+	m.MaxDeleteOps = int64FromPtr(spec.MaxDeleteOps)
 }
 
 // refreshRateLimit reads the bucket's rate limit back from the Admin API and

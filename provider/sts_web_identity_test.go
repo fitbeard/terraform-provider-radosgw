@@ -28,9 +28,7 @@ import (
 // Requires the OIDC provider fixture to be running (`make oidc-up`); the test is
 // skipped when RADOSGW_OIDC_ISSUER is unset. Runs on all Ceph releases: it only
 // creates the OIDC provider + role (no import/update), so the in-place-update
-// limitation that gates the OIDC provider resource test to Tentacle does not
-// apply. The provider is created with allow_updates = false as a safety belt so
-// no in-place update API is ever reached on Squid.
+// limitation (Tentacle+) never applies here.
 func TestAccSTSAssumeRoleWithWebIdentity(t *testing.T) {
 	t.Parallel()
 
@@ -63,11 +61,6 @@ func testAccSTSWebIdentityConfig(issuer, host, roleName string) string {
 resource "radosgw_iam_openid_connect_provider" "idp" {
   url            = %[1]q
   client_id_list = ["test-client"]
-
-  # Force replace-on-change instead of in-place updates, which are unsupported on
-  # Squid. Not exercised here (single create), but keeps the test safe on all
-  # releases.
-  allow_updates = false
 
   # RadosGW only verifies the thumbprint against the IdP certificate when the
   # JWKS exposes x5c certificate chains; this provider's JWKS has none, so a

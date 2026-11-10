@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -24,6 +23,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &OIDCProviderResource{}
 var _ resource.ResourceWithImportState = &OIDCProviderResource{}
+var _ resource.ResourceWithModifyPlan = &OIDCProviderResource{}
 
 func NewIAMOIDCProviderResource() resource.Resource {
 	return &OIDCProviderResource{}
@@ -41,65 +41,6 @@ type OIDCProviderResourceModel struct {
 	URL            types.String `tfsdk:"url"`
 	ClientIDList   types.Set    `tfsdk:"client_id_list"`
 	ThumbprintList types.List   `tfsdk:"thumbprint_list"`
-	AllowUpdates   types.Bool   `tfsdk:"allow_updates"`
-}
-
-// Custom plan modifiers for conditional replacement based on allow_updates
-
-type requiresReplaceIfAllowUpdatesIsFalseModifier struct{}
-
-func requiresReplaceIfAllowUpdatesIsFalse() planmodifier.Set {
-	return &requiresReplaceIfAllowUpdatesIsFalseModifier{}
-}
-
-func (m *requiresReplaceIfAllowUpdatesIsFalseModifier) Description(ctx context.Context) string {
-	return "Requires replacement if allow_updates is false and the value changes."
-}
-
-func (m *requiresReplaceIfAllowUpdatesIsFalseModifier) MarkdownDescription(ctx context.Context) string {
-	return "Requires replacement if `allow_updates` is false and the value changes."
-}
-
-func (m *requiresReplaceIfAllowUpdatesIsFalseModifier) PlanModifySet(ctx context.Context, req planmodifier.SetRequest, resp *planmodifier.SetResponse) {
-	var allowUpdates types.Bool
-	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("allow_updates"), &allowUpdates)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	if allowUpdates.IsNull() || !allowUpdates.ValueBool() {
-		if !req.PlanValue.Equal(req.StateValue) {
-			resp.RequiresReplace = true
-		}
-	}
-}
-
-type requiresReplaceIfAllowUpdatesIsFalseForListModifier struct{}
-
-func requiresReplaceIfAllowUpdatesIsFalseForList() planmodifier.List {
-	return &requiresReplaceIfAllowUpdatesIsFalseForListModifier{}
-}
-
-func (m *requiresReplaceIfAllowUpdatesIsFalseForListModifier) Description(ctx context.Context) string {
-	return "Requires replacement if allow_updates is false and the value changes."
-}
-
-func (m *requiresReplaceIfAllowUpdatesIsFalseForListModifier) MarkdownDescription(ctx context.Context) string {
-	return "Requires replacement if `allow_updates` is false and the value changes."
-}
-
-func (m *requiresReplaceIfAllowUpdatesIsFalseForListModifier) PlanModifyList(ctx context.Context, req planmodifier.ListRequest, resp *planmodifier.ListResponse) {
-	var allowUpdates types.Bool
-	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("allow_updates"), &allowUpdates)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	if allowUpdates.IsNull() || !allowUpdates.ValueBool() {
-		if !req.PlanValue.Equal(req.StateValue) {
-			resp.RequiresReplace = true
-		}
-	}
 }
 
 // XML response structures for RadosGW OIDC API
@@ -161,36 +102,54 @@ func (r *OIDCProviderResource) Schema(ctx context.Context, req resource.SchemaRe
 			},
 			"client_id_list": schema.SetAttribute{
 				MarkdownDescription: "List of client IDs (also known as audiences) that are allowed to authenticate with this provider. " +
-					"These values correspond to the `aud` claim in OIDC tokens.",
+					"These values correspond to the `aud` claim in OIDC tokens.\n\n" +
+					"~> **Note:** In-place updates of this attribute require Ceph Tentacle (20.x) or higher. When the " +
+					"provider's `ceph_version` is Squid (19.x), changing it forces resource replacement.",
 				Required:    true,
 				ElementType: types.StringType,
-				PlanModifiers: []planmodifier.Set{
-					requiresReplaceIfAllowUpdatesIsFalse(),
-				},
 			},
 			"thumbprint_list": schema.ListAttribute{
 				MarkdownDescription: "List of certificate thumbprints for the OpenID Connect provider's IDP certificate(s). " +
-					"Each thumbprint is a hex-encoded SHA-1 hash (40 characters). A maximum of 5 thumbprints are allowed.",
+					"Each thumbprint is a hex-encoded SHA-1 hash (40 characters). A maximum of 5 thumbprints are allowed.\n\n" +
+					"~> **Note:** In-place updates of this attribute require Ceph Tentacle (20.x) or higher. When the " +
+					"provider's `ceph_version` is Squid (19.x), changing it forces resource replacement.",
 				Required:    true,
 				ElementType: types.StringType,
-				PlanModifiers: []planmodifier.List{
-					requiresReplaceIfAllowUpdatesIsFalseForList(),
-				},
 				Validators: []validator.List{
 					listvalidator.SizeBetween(1, 5),
 					listvalidator.ValueStringsAre(stringvalidator.LengthBetween(40, 40)),
 				},
 			},
-			"allow_updates": schema.BoolAttribute{
-				MarkdownDescription: "Whether to allow in-place updates for `client_id_list` and `thumbprint_list`. " +
-					"When `true` (default), changes will be applied in-place. " +
-					"When `false`, changes to these attributes will destroy and recreate the provider. " +
-					"~> **Note:** In-place updates require Ceph Tentacle (20.x). On older versions, set to `false`.",
-				Optional: true,
-				Computed: true,
-				Default:  booldefault.StaticBool(true),
-			},
 		},
+	}
+}
+
+// ModifyPlan forces resource replacement when client_id_list or thumbprint_list
+// changes on a cluster older than Tentacle (20.x), where the in-place update APIs
+// (UpdateOpenIDConnectProviderThumbprint, Add/RemoveClientID) are unavailable.
+// On Tentacle and later the change is applied in place by Update.
+func (r *OIDCProviderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Only relevant on update (both prior state and plan present), and only when
+	// the target release lacks in-place update support.
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	if r.client == nil || r.client.CephVersion.GreaterThanOrEqual(CephVersion_Tentacle) {
+		return
+	}
+
+	var plan, state OIDCProviderResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if !plan.ClientIDList.Equal(state.ClientIDList) {
+		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("client_id_list"))
+	}
+	if !plan.ThumbprintList.Equal(state.ThumbprintList) {
+		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("thumbprint_list"))
 	}
 }
 
@@ -371,7 +330,7 @@ func (r *OIDCProviderResource) Update(ctx context.Context, req resource.UpdateRe
 			if errors.As(err, &iamErr) && iamErr.StatusCode == 405 {
 				resp.Diagnostics.AddError(
 					"Error Updating OIDC Provider Thumbprint",
-					"UpdateOpenIDConnectProviderThumbprint is not supported. This requires Ceph Tentacle (20.x). Set allow_updates=false to force resource replacement instead.",
+					"UpdateOpenIDConnectProviderThumbprint is not supported. This requires Ceph Tentacle (20.x). Set the provider ceph_version to a supported release with in-place update support, or recreate the resource.",
 				)
 				return
 			}
@@ -420,7 +379,7 @@ func (r *OIDCProviderResource) Update(ctx context.Context, req resource.UpdateRe
 					if errors.As(err, &iamErr) && iamErr.StatusCode == 405 {
 						resp.Diagnostics.AddError(
 							"Error Adding Client ID",
-							"AddClientIDToOpenIDConnectProvider is not supported. This requires Ceph Tentacle (20.x). Set allow_updates=false to force resource replacement instead.",
+							"AddClientIDToOpenIDConnectProvider is not supported. This requires Ceph Tentacle (20.x). Set the provider ceph_version to a supported release with in-place update support, or recreate the resource.",
 						)
 						return
 					}
@@ -452,7 +411,7 @@ func (r *OIDCProviderResource) Update(ctx context.Context, req resource.UpdateRe
 					if errors.As(err, &iamErr) && iamErr.StatusCode == 405 {
 						resp.Diagnostics.AddError(
 							"Error Removing Client ID",
-							"RemoveClientIDFromOpenIDConnectProvider is not supported. This requires Ceph Tentacle (20.x). Set allow_updates=false to force resource replacement instead.",
+							"RemoveClientIDFromOpenIDConnectProvider is not supported. This requires Ceph Tentacle (20.x). Set the provider ceph_version to a supported release with in-place update support, or recreate the resource.",
 						)
 						return
 					}

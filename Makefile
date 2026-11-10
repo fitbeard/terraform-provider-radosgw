@@ -94,6 +94,7 @@ testacc: ## Run acceptance tests (requires running Ceph cluster)
 	RADOSGW_ACCESS_KEY=$(TEST_ACCESS_KEY) \
 	RADOSGW_SECRET_KEY=$(TEST_SECRET_KEY) \
 	RADOSGW_OIDC_ISSUER=$(OIDC_ISSUER) \
+	RADOSGW_CEPH_VERSION=$(CEPH_VERSION) \
 	go test -v -cover -timeout $(TEST_TIMEOUT) ./...
 
 # =============================================================================

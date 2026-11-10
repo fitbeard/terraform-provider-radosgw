@@ -227,3 +227,57 @@ data "radosgw_s3_bucket_rate_limit" "test" {
 }
 `, bucket)
 }
+
+// TestAccRadosgwS3BucketRateLimit_listDeleteOps covers the Umbrella-only (21+)
+// max_list_ops/max_delete_ops fields. Gated to Umbrella; on older releases the
+// provider rejects them at plan time (see ModifyPlan).
+func TestAccRadosgwS3BucketRateLimit_listDeleteOps(t *testing.T) {
+	t.Parallel()
+
+	bucketName := randomName("tf-acc-ratelimit-ld")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Umbrella) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRadosgwS3BucketDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccS3BucketRateLimitConfig_listDeleteOps(bucketName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("radosgw_s3_bucket_rate_limit.test", "max_list_ops", "7"),
+					resource.TestCheckResourceAttr("radosgw_s3_bucket_rate_limit.test", "max_delete_ops", "4"),
+					// Read back through the data source.
+					resource.TestCheckResourceAttr("data.radosgw_s3_bucket_rate_limit.test", "max_list_ops", "7"),
+					resource.TestCheckResourceAttr("data.radosgw_s3_bucket_rate_limit.test", "max_delete_ops", "4"),
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PostApplyPostRefresh: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+func testAccS3BucketRateLimitConfig_listDeleteOps(bucket string) string {
+	return providerConfig() + fmt.Sprintf(`
+resource "radosgw_s3_bucket" "test" {
+  bucket        = %[1]q
+  force_destroy = true
+}
+
+resource "radosgw_s3_bucket_rate_limit" "test" {
+  bucket         = radosgw_s3_bucket.test.bucket
+  enabled        = true
+  max_read_ops   = 100
+  max_list_ops   = 7
+  max_delete_ops = 4
+}
+
+data "radosgw_s3_bucket_rate_limit" "test" {
+  bucket     = radosgw_s3_bucket_rate_limit.test.bucket
+  depends_on = [radosgw_s3_bucket_rate_limit.test]
+}
+`, bucket)
+}

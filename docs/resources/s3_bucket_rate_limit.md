@@ -5,7 +5,7 @@ description: |-
   Manages the rate limit for a single S3 bucket in RadosGW via the Admin Ops API (ratelimit-scope=bucket). Rate limits throttle the number of operations and the number of bytes read from or written to the bucket per minute.
   ~> Admin capability required. Unlike the S3-based bucket sub-resources (radosgw_s3_bucket_acl, radosgw_s3_bucket_cors_configuration, …), rate limits are only available through the Admin Ops API and require the ratelimit capability (ratelimit=write to set, ratelimit=read to read). A user without it receives AccessDenied. This capability is cluster-wide and independent of the buckets cap.
   ~> Note: A bucket has a single rate-limit configuration. Declaring multiple radosgw_s3_bucket_rate_limit resources for the same bucket will cause them to overwrite each other.
-  ~> Ceph version: max_list_ops and max_delete_ops were added in Ceph 21 (Umbrella) and are not exposed by this resource yet. On Squid and Tentacle only max_read_ops, max_write_ops, max_read_bytes, and max_write_bytes apply.
+  ~> Ceph version: max_list_ops and max_delete_ops require Ceph 21 (Umbrella). They may only be set to a non-zero value when the provider's ceph_version is 21/umbrella (or unset, which assumes the newest release); on Squid/Tentacle setting them is rejected at plan time.
   ~> Note: When this resource is destroyed, the bucket's rate limit is disabled and its limits are reset to 0.
 ---
 
@@ -17,7 +17,7 @@ Manages the rate limit for a single S3 bucket in RadosGW via the Admin Ops API (
 
 ~> **Note:** A bucket has a single rate-limit configuration. Declaring multiple `radosgw_s3_bucket_rate_limit` resources for the same bucket will cause them to overwrite each other.
 
-~> **Ceph version:** `max_list_ops` and `max_delete_ops` were added in Ceph 21 (Umbrella) and are not exposed by this resource yet. On Squid and Tentacle only `max_read_ops`, `max_write_ops`, `max_read_bytes`, and `max_write_bytes` apply.
+~> **Ceph version:** `max_list_ops` and `max_delete_ops` require Ceph 21 (Umbrella). They may only be set to a non-zero value when the provider's `ceph_version` is `21`/`umbrella` (or unset, which assumes the newest release); on Squid/Tentacle setting them is rejected at plan time.
 
 ~> **Note:** When this resource is destroyed, the bucket's rate limit is disabled and its limits are reset to `0`.
 
@@ -51,6 +51,8 @@ The following arguments are supported:
 
 
 * `enabled` - (Optional) Whether the rate limit is enabled for the bucket. Default: `true`.
+* `max_delete_ops` - (Optional) Maximum delete operations per minute. `0` disables this limit (the default). **Requires Ceph 21 (Umbrella)** — see the Ceph version note above.
+* `max_list_ops` - (Optional) Maximum bucket-listing operations per minute. `0` disables this limit (the default). **Requires Ceph 21 (Umbrella)** — see the Ceph version note above.
 * `max_read_bytes` - (Optional) Maximum read bytes per minute. `0` disables this limit (the default). Omitting the attribute resets it to `0`.
 * `max_read_ops` - (Optional) Maximum read operations per minute. `0` disables this limit (the default). Omitting the attribute resets it to `0`.
 * `max_write_bytes` - (Optional) Maximum write bytes per minute. `0` disables this limit (the default). Omitting the attribute resets it to `0`.
@@ -64,6 +66,8 @@ The following attributes are exported:
 
 * `bucket` - See Argument Reference above.
 * `enabled` - See Argument Reference above.
+* `max_delete_ops` - See Argument Reference above.
+* `max_list_ops` - See Argument Reference above.
 * `max_read_bytes` - See Argument Reference above.
 * `max_read_ops` - See Argument Reference above.
 * `max_write_bytes` - See Argument Reference above.
