@@ -104,8 +104,7 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 			"admin capabilities (`radosgw-admin caps add`) are separate, authorize the " +
 			"Admin Ops API, and are **cluster-wide**; they can be added to an account user " +
 			"but do not grant S3/IAM data-plane access.\n\n" +
-			"~> **Note:** Accounts require Ceph Squid (19.x) or later; they are not " +
-			"available on Reef (18.x).\n\n" +
+			"~> **Note:** Accounts require Ceph Squid (19.x) or later.\n\n" +
 			"~> **Note:** A capability-name bug affects the account read/delete admin " +
 			"operations on all Squid (19.2.x) releases and on Tentacle before 20.2.2: " +
 			"they check a mistyped `account` capability that cannot be granted, so a " +

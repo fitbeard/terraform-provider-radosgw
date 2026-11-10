@@ -17,9 +17,6 @@ RUN apt-get update && apt-get install --yes \
     && apt-get upgrade --yes \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Workaround for https://tracker.ceph.com/issues/74199
-RUN rm -fr /usr/share/ceph/mgr/dashboard/controllers/smb.py
-
 # Persist bash history.
 RUN mkdir /command-history \
     && touch /command-history/.bash_history \

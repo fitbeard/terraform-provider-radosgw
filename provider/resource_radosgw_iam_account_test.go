@@ -17,7 +17,7 @@ func TestAccRadosgwIAMAccount_basic(t *testing.T) {
 	accountName := randomName("account")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMAccountDestroy,
 		Steps: []resource.TestStep{
@@ -53,7 +53,7 @@ func TestAccRadosgwIAMAccount_withEmail(t *testing.T) {
 	email := randomEmail()
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMAccountDestroy,
 		Steps: []resource.TestStep{
@@ -75,7 +75,7 @@ func TestAccRadosgwIAMAccount_withLimits(t *testing.T) {
 	accountName := randomName("account")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMAccountDestroy,
 		Steps: []resource.TestStep{
@@ -131,7 +131,7 @@ func TestAccRadosgwIAMAccount_withRootUser(t *testing.T) {
 	userID := randomName("acctroot")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMAccountDestroy,
 		Steps: []resource.TestStep{
@@ -188,7 +188,7 @@ resource "radosgw_iam_account" "auto" {
 	}
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMAccountDestroy,
 		Steps: []resource.TestStep{
@@ -227,7 +227,7 @@ func TestAccRadosgwIAMAccount_userAccountRemovalRecreates(t *testing.T) {
 	userID := randomName("member")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMAccountDestroy,
 		Steps: []resource.TestStep{
@@ -263,7 +263,7 @@ func TestAccRadosgwIAMAccount_duplicateNameError(t *testing.T) {
 	accountName := randomName("account")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMAccountDestroy,
 		Steps: []resource.TestStep{
@@ -323,7 +323,7 @@ func TestAccRadosgwIAMAccount_userTenantMismatch(t *testing.T) {
 	accountName := randomName("account")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMAccountDestroy,
 		Steps: []resource.TestStep{

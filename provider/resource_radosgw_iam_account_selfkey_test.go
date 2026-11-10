@@ -36,7 +36,7 @@ func TestAccRadosgwIAMAccount_memberSelfCreateAccessKey(t *testing.T) {
 	rootSK := strings.ReplaceAll(randomName("selfkeyrootsk"), "-", "")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMAccountDestroy,
 		Steps: []resource.TestStep{

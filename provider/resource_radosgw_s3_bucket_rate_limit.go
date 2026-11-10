@@ -39,9 +39,9 @@ type S3BucketRateLimitResource struct {
 // =============================================================================
 
 // S3BucketRateLimitResourceModel represents a per-bucket rate limit managed via
-// the Admin Ops API. Only the fields supported on Ceph Reef/Squid/Tentacle
-// (18-20) are exposed; max-list-ops/max-delete-ops are Ceph 21+ and are added
-// when that release is supported.
+// the Admin Ops API. Only the fields supported on Ceph Squid/Tentacle (19-20)
+// are exposed; max-list-ops/max-delete-ops are Ceph 21+ (Umbrella) and are not
+// exposed yet.
 type S3BucketRateLimitResourceModel struct {
 	Bucket        types.String `tfsdk:"bucket"`
 	Tenant        types.String `tfsdk:"tenant"`
@@ -71,9 +71,8 @@ func (r *S3BucketRateLimitResource) Schema(ctx context.Context, req resource.Sch
 			"without it receives `AccessDenied`. This capability is cluster-wide and independent of the `buckets` cap.\n\n" +
 			"~> **Note:** A bucket has a single rate-limit configuration. Declaring multiple " +
 			"`radosgw_s3_bucket_rate_limit` resources for the same bucket will cause them to overwrite each other.\n\n" +
-			"~> **Ceph version:** `max_list_ops` and `max_delete_ops` were added in Ceph 21 (Ceph v21). They are not " +
-			"exposed by this resource yet because the latest stable release is Tentacle (20); they will be added " +
-			"once Ceph 21 is supported. On Reef/Squid/Tentacle only `max_read_ops`, `max_write_ops`, `max_read_bytes`, " +
+			"~> **Ceph version:** `max_list_ops` and `max_delete_ops` were added in Ceph 21 (Umbrella) and are not " +
+			"exposed by this resource yet. On Squid and Tentacle only `max_read_ops`, `max_write_ops`, `max_read_bytes`, " +
 			"and `max_write_bytes` apply.\n\n" +
 			"~> **Note:** When this resource is destroyed, the bucket's rate limit is disabled and its limits are reset to `0`.",
 

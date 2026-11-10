@@ -26,15 +26,12 @@ func TestAccRadosgwSNSTopic_basic(t *testing.T) {
 		resource.TestCheckResourceAttr("radosgw_sns_topic.test", "push_endpoint", "http://localhost:10900"),
 		resource.TestCheckResourceAttr("radosgw_sns_topic.test", "persistent", "false"),
 	}
-	// User is only returned by GetTopicAttributes on Squid+
-	if !getCephVersion().LessThan(CephVersion_Squid) {
-		checks = append(checks,
-			resource.TestCheckResourceAttrSet("radosgw_sns_topic.test", "user"),
-			resource.TestCheckResourceAttr("radosgw_sns_topic.test", "verify_ssl", "true"),
-			resource.TestCheckResourceAttr("radosgw_sns_topic.test", "cloudevents", "false"),
-			resource.TestCheckResourceAttr("radosgw_sns_topic.test", "use_ssl", "false"),
-		)
-	}
+	checks = append(checks,
+		resource.TestCheckResourceAttrSet("radosgw_sns_topic.test", "user"),
+		resource.TestCheckResourceAttr("radosgw_sns_topic.test", "verify_ssl", "true"),
+		resource.TestCheckResourceAttr("radosgw_sns_topic.test", "cloudevents", "false"),
+		resource.TestCheckResourceAttr("radosgw_sns_topic.test", "use_ssl", "false"),
+	)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },

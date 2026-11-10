@@ -29,14 +29,13 @@ func TestAccRadosgwIAMAccessKeysDataSource_basic(t *testing.T) {
 }
 
 // TestAccRadosgwIAMAccessKeysDataSource_multiple tests listing multiple access keys.
-// Multiple access key management has issues in Reef (18.x), requires Squid (19.x) or higher.
 func TestAccRadosgwIAMAccessKeysDataSource_multiple(t *testing.T) {
 	t.Parallel()
 
 	userID := randomName("tf-acc-user")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckRadosgwIAMUserDestroy,
 		Steps: []resource.TestStep{

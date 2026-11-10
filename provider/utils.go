@@ -31,13 +31,30 @@ const (
 	DefaultOperationTimeout = 2 * time.Minute
 )
 
-// isConcurrentModificationError checks if an error is a ConcurrentModification error.
-// Note: go-ceph doesn't expose this as a typed error, so we check the error string.
+// isConcurrentModificationError reports whether err is a transient
+// concurrent-metadata-modification failure that is safe to retry.
+//
+// RadosGW serializes writes to an owner's shared metadata object (user keys,
+// subusers, caps, quota, account, bucket ownership) with optimistic concurrency.
+// When several of these are mutated for the same owner in parallel (common in
+// the acceptance suite's "_multiple" cases, and possible in production
+// automation), a collision occurs. How it surfaces varies by Ceph release:
+//   - some releases return the explicit "ConcurrentModification" code;
+//   - Squid/Umbrella return a generic HTTP 500, which the go-ceph Admin API
+//     stringifies as the code "UnknownError" (Tentacle completed these writes
+//     without surfacing an error, which is why it was never observed there).
+//
+// This is the same class of transient 5xx-under-contention already handled for
+// SNS (see isTransientSNSError). Both are safe to retry: the operations are
+// idempotent and the metadata object settles once the competing write lands.
+// go-ceph does not expose these as typed errors, so we match the code string.
 func isConcurrentModificationError(err error) bool {
 	if err == nil {
 		return false
 	}
-	return strings.Contains(err.Error(), "ConcurrentModification")
+	msg := err.Error()
+	return strings.Contains(msg, "ConcurrentModification") ||
+		strings.Contains(msg, "UnknownError")
 }
 
 // retryOnConcurrentModification wraps an operation with retry logic for ConcurrentModification errors
@@ -75,7 +92,7 @@ func retryOnConcurrentModification(ctx context.Context, operation string, fn fun
 }
 
 // retryOnNotFound wraps an operation with retry logic for transient "not found" errors.
-// This handles eventual consistency on older Ceph versions (e.g. Reef) where a resource
+// This handles eventual consistency where a resource
 // may not be immediately visible after creation.
 func retryOnNotFound(ctx context.Context, operation string, isNotFound func(error) bool, fn func() error) error {
 	return retry.RetryContext(ctx, DefaultOperationTimeout, func() *retry.RetryError {

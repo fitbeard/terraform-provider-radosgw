@@ -7,7 +7,7 @@ description: |-
   Permissions
   The account root user has full access to all of the account's resources without any policy. Regular (non-root) account users start with no permissions — the root must grant them access through IAM identity policies, group membership, or assumable roles before they can, for example, create buckets. Permissions can be granted with inline policies or with AWS managed policies, attached by the account root via the IAM API (aws iam attach-user-policy). RadosGW provides managed policies such as arn:aws:iam::aws:policy/AmazonS3FullAccess and arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess.
   ~> Note: These are two distinct permission systems. IAM policies (above) govern an account's S3/IAM data-plane actions and are account-scoped. RadosGW admin capabilities (radosgw-admin caps add) are separate, authorize the Admin Ops API, and are cluster-wide; they can be added to an account user but do not grant S3/IAM data-plane access.
-  ~> Note: Accounts require Ceph Squid (19.x) or later; they are not available on Reef (18.x).
+  ~> Note: Accounts require Ceph Squid (19.x) or later.
   ~> Note: A capability-name bug affects the account read/delete admin operations on all Squid (19.2.x) releases and on Tentacle before 20.2.2: they check a mistyped account capability that cannot be granted, so a normal accounts=* user receives AccessDenied (refresh, import, and destroy fail). On those versions the provider's RadosGW user must be a system user (radosgw-admin user modify --uid=<user> --system). Ceph 20.2.2+ fixes this and works with accounts=* alone.
   ~> Note: This resource requires the accounts=* capability on the RadosGW user configured in the provider.
   ~> Note: Account and default-bucket quota management is not supported by this resource yet, because the underlying go-ceph library does not expose an account quota setter. Manage account quotas with radosgw-admin quota in the meantime; support will be added once available upstream.
@@ -25,7 +25,7 @@ The **account root** user has full access to all of the account's resources with
 
 ~> **Note:** These are two distinct permission systems. IAM policies (above) govern an account's S3/IAM data-plane actions and are account-scoped. RadosGW admin capabilities (`radosgw-admin caps add`) are separate, authorize the Admin Ops API, and are **cluster-wide**; they can be added to an account user but do not grant S3/IAM data-plane access.
 
-~> **Note:** Accounts require Ceph Squid (19.x) or later; they are not available on Reef (18.x).
+~> **Note:** Accounts require Ceph Squid (19.x) or later.
 
 ~> **Note:** A capability-name bug affects the account read/delete admin operations on all Squid (19.2.x) releases and on Tentacle before 20.2.2: they check a mistyped `account` capability that cannot be granted, so a normal `accounts=*` user receives `AccessDenied` (refresh, import, and destroy fail). On those versions the provider's RadosGW user must be a **system user** (`radosgw-admin user modify --uid=<user> --system`). Ceph **20.2.2+** fixes this and works with `accounts=*` alone.
 

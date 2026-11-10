@@ -98,7 +98,7 @@ EOF
 # REJECTS the old type-1 keys for authentication (clients fail with
 # "handle_auth_bad_method ... Permission denied", so the cluster never comes up).
 # Generating keys here lets each Ceph release mint keys of a type it accepts,
-# keeping the bootstrap working across reef/squid/tentacle.
+# keeping the bootstrap working across squid/tentacle/umbrella.
 echo "Generating keyring..."
 ceph-authtool --create-keyring "$CEPH_DIR/keyring" \
     --gen-key -n mon. --cap mon 'allow *'
@@ -168,10 +168,20 @@ done
 echo "Initializing OSDs..."
 for i in $(seq 0 $((NUM_OSDS - 1))); do
     echo "  Creating OSD $i..."
+    OSD_UUID=$(uuidgen)
     ceph-osd --conf "$CEPH_DIR/ceph.conf" \
         --id "$i" \
-        --mkfs
-    
+        --mkfs \
+        --osd-uuid "$OSD_UUID"
+
+    # Pre-register the OSD in the osdmap so it already exists when it starts.
+    # Ceph 21 (Umbrella) aborts an OSD that has to auto-create itself on start:
+    # `create-or-move` returns "osd.N does not exist", the OSD self-sends `osd
+    # create`, and the retry then sends an empty mon command that the monitor
+    # rejects as "unparseable JSON", so update_crush_location fails fatally.
+    # Registering it up front (as vstart.sh does) avoids that path entirely.
+    ceph --conf "$CEPH_DIR/ceph.conf" osd new "$OSD_UUID" "$i" >/dev/null
+
     nohup ceph-osd --conf "$CEPH_DIR/ceph.conf" \
         --id "$i" \
         --foreground \

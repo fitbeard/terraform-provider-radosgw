@@ -90,7 +90,7 @@ func TestAccRadosgwIAMAccountUser_basic(t *testing.T) {
 	userName := strings.ReplaceAll(randomName("iamuser"), "-", "")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             ar.destroy,
 		Steps: []resource.TestStep{
@@ -129,7 +129,7 @@ func TestAccRadosgwIAMAccountUser_updateAndImport(t *testing.T) {
 	name2 := strings.ReplaceAll(randomName("u2"), "-", "")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             ar.destroy,
 		Steps: []resource.TestStep{
@@ -172,7 +172,7 @@ func TestAccRadosgwIAMAccountAccessKey_statusAndImport(t *testing.T) {
 	userName := strings.ReplaceAll(randomName("keyuser"), "-", "")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             ar.destroy,
 		Steps: []resource.TestStep{
@@ -217,7 +217,7 @@ func TestAccRadosgwIAMAccountUser_forceDestroy(t *testing.T) {
 	userName := strings.ReplaceAll(randomName("fduser"), "-", "")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckSkipForVersion(t, CephVersion_Squid) },
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             ar.destroy,
 		Steps: []resource.TestStep{

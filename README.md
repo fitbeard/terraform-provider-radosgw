@@ -11,15 +11,17 @@ This provider enables [Terraform](https://www.terraform.io) and [OpenTofu](https
 
 ## Supported Ceph Versions
 
-This provider officially supports the following Ceph releases:
+This provider officially supports the actively maintained Ceph releases:
 
 | Release | Version | Status |
 |---------|---------|--------|
+| Umbrella | 21.x | Full support |
 | Tentacle | 20.x | Full support |
 | Squid | 19.x | Full support |
-| Reef | 18.x | Supported (some features limited) |
 
-Older versions may work but are not officially tested.
+Reef (18.x) reached [end of life](https://docs.ceph.com/en/latest/releases/) on
+2026-03-20 and is **no longer supported or tested**. Earlier releases may work
+but are not tested; upgrade to a maintained release.
 
 ## Development
 

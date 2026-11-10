@@ -3,7 +3,7 @@
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
-      "CEPH_RELEASE": "20.2.4"
+      "CEPH_RELEASE": "21.2.0"
     }
   },
   "features": {
