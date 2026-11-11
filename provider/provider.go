@@ -183,13 +183,12 @@ radosgw-admin caps add --uid=admin --caps="accounts=*;buckets=*;metadata=*;oidc-
 			},
 			"ceph_version": schema.StringAttribute{
 				MarkdownDescription: "The Ceph release of the target cluster, used to gate version-dependent " +
-					"behavior. Accepts a codename (`squid`, `tentacle`, `umbrella`) or a version number " +
-					"(`19`, `20`, `21`, `21.2.0`). Can be set via the `RADOSGW_CEPH_VERSION` environment variable. " +
-					"When unset, the provider assumes the newest supported release (Umbrella, 21.x). Set this to your " +
-					"cluster's release when running an older one so the provider gates features correctly:\n\n" +
-					"- `radosgw_iam_openid_connect_provider`: in-place updates of `client_id_list`/`thumbprint_list` " +
-					"require Tentacle (20.x); on Squid (19.x) changes force resource replacement.\n" +
-					"- `radosgw_s3_bucket_rate_limit`: `max_list_ops`/`max_delete_ops` require Umbrella (21.x).",
+					"behavior in resources that need it (for example, OpenID Connect provider in-place updates and the " +
+					"S3 bucket rate-limit list/delete-ops fields — see those resources' documentation for specifics). " +
+					"Accepts a codename (`squid`, `tentacle`, `umbrella`) or a version number (`19`, `20`, `21`, " +
+					"`21.2.0`), or set it via the `RADOSGW_CEPH_VERSION` environment variable. When unset, the provider " +
+					"assumes the newest supported release (Umbrella, 21.x); set it to your cluster's release when " +
+					"running an older one so features are gated correctly.",
 				Optional: true,
 			},
 		},
@@ -701,6 +700,7 @@ func (p *RadosgwProvider) DataSources(ctx context.Context) []func() datasource.D
 		NewS3BucketDataSource,
 		NewS3BucketPolicyDataSource,
 		NewS3BucketRateLimitDataSource,
+		NewCallerIdentityDataSource,
 		NewSNSTopicDataSource,
 	}
 }
