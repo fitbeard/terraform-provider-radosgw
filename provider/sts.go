@@ -84,6 +84,44 @@ func assumeRole(ctx context.Context, client *IAMClient, p assumeRoleParams) (sts
 	return creds, nil
 }
 
+// callerIdentity holds the result of an STS GetCallerIdentity call.
+type callerIdentity struct {
+	Account string
+	Arn     string
+	UserID  string
+}
+
+// getCallerIdentity calls STS GetCallerIdentity against the RadosGW endpoint,
+// signed with the provider's credentials, and returns the caller's account ID,
+// ARN, and user ID. Requires Ceph Umbrella (21.x).
+func getCallerIdentity(ctx context.Context, client *IAMClient) (callerIdentity, error) {
+	params := url.Values{}
+	params.Set("Action", "GetCallerIdentity")
+	params.Set("Version", "2011-06-15")
+
+	body, err := client.DoPostRequest(ctx, params, "sts")
+	if err != nil {
+		return callerIdentity{}, err
+	}
+
+	var resp struct {
+		Result struct {
+			Account string `xml:"Account"`
+			Arn     string `xml:"Arn"`
+			UserID  string `xml:"UserId"`
+		} `xml:"GetCallerIdentityResult"`
+	}
+	if err := xml.Unmarshal(body, &resp); err != nil {
+		return callerIdentity{}, fmt.Errorf("could not parse GetCallerIdentity response: %w (body: %s)", err, string(body))
+	}
+
+	return callerIdentity{
+		Account: resp.Result.Account,
+		Arn:     resp.Result.Arn,
+		UserID:  resp.Result.UserID,
+	}, nil
+}
+
 // assumeRoleWithWebIdentityParams are the inputs for an STS
 // AssumeRoleWithWebIdentity call.
 type assumeRoleWithWebIdentityParams struct {
