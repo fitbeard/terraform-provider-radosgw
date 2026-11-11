@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v2.0.0...v2.1.0) (2026-11-11)
+
+
+### Features
+
+* add radosgw_caller_identity data source (STS GetCallerIdentity) ([#158](https://github.com/fitbeard/terraform-provider-radosgw/issues/158)) ([44a2411](https://github.com/fitbeard/terraform-provider-radosgw/commit/44a241133476dc50a044b7ff5a1980b2e896f0c5))
+
 ## [2.0.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.9.0...v2.0.0) (2026-11-10)
 
 
