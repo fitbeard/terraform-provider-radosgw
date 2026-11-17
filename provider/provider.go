@@ -675,6 +675,7 @@ func (p *RadosgwProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewS3BucketWebsiteConfigurationResource,
 		NewS3BucketCorsConfigurationResource,
 		NewS3BucketRateLimitResource,
+		NewS3BucketOwnershipControlsResource,
 		NewSNSTopicResource,
 		NewSNSTopicPolicyResource,
 	}
