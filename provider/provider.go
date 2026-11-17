@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -13,6 +14,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3control"
+	smithyendpoints "github.com/aws/smithy-go/endpoints"
+	"github.com/aws/smithy-go/middleware"
 	"github.com/ceph/go-ceph/rgw/admin"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -102,8 +106,9 @@ func assumeRoleWithWebIdentityHasUnknown(m *assumeRoleWithWebIdentityModel) bool
 // used to build per-resource IAM/STS clients. When the provider assumes a role,
 // these are the temporary credentials (AccessKey/SecretKey/SessionToken).
 type RadosgwClient struct {
-	Admin *admin.API
-	S3    *s3.Client
+	Admin     *admin.API
+	S3        *s3.Client
+	S3Control *s3control.Client
 
 	Endpoint     string
 	AccessKey    string
@@ -116,6 +121,40 @@ type RadosgwClient struct {
 	// rate-limit list/delete ops). It defaults to the newest known release when
 	// the ceph_version attribute is not set.
 	CephVersion CephVersion
+}
+
+// disableS3ControlHostPrefix is an AWS SDK middleware customization that turns
+// off the account-id endpoint host prefixing the SDK applies to S3 Control
+// requests. The SDK registers an "EndpointHostPrefix" finalize middleware that
+// rewrites the request host to <account-id>.<host>, which requires wildcard DNS.
+// RadosGW instead identifies the account from the x-amz-account-id header (still
+// sent) and ignores the hostname, so we remove that middleware to keep requests
+// on the plain configured endpoint — no wildcard DNS required. The error is
+// ignored for operations that have no such middleware.
+func disableS3ControlHostPrefix(stack *middleware.Stack) error {
+	// The SDK registers an "EndpointHostPrefix" finalize middleware that, even
+	// after a custom endpoint resolver runs, prepends <account-id>. to the host.
+	// Remove it so the request stays on the plain endpoint. Tolerate operations
+	// that don't register it.
+	_, _ = stack.Finalize.Remove("EndpointHostPrefix")
+	return nil
+}
+
+// s3controlPlainEndpointResolver resolves every S3 Control request to the plain
+// configured endpoint. The default s3control endpoint ruleset folds the account
+// id into the hostname (<account-id>.<host>); RadosGW ignores the hostname and
+// routes by the x-amz-account-id header, so we bypass the ruleset entirely and
+// avoid requiring wildcard DNS.
+type s3controlPlainEndpointResolver struct {
+	endpoint string
+}
+
+func (r s3controlPlainEndpointResolver) ResolveEndpoint(_ context.Context, _ s3control.EndpointParameters) (smithyendpoints.Endpoint, error) {
+	u, err := url.Parse(r.endpoint)
+	if err != nil {
+		return smithyendpoints.Endpoint{}, err
+	}
+	return smithyendpoints.Endpoint{URI: *u}, nil
 }
 
 func (p *RadosgwProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -627,9 +666,27 @@ func (p *RadosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 		o.UsePathStyle = true
 	})
 
+	// Create S3 Control client for account-level APIs (e.g. account-wide public
+	// access block). The AWS SDK addresses s3control by prefixing the account id
+	// to the endpoint hostname (<account-id>.host), which requires wildcard DNS
+	// that RadosGW deployments generally do not have. RadosGW instead routes by
+	// the x-amz-account-id header and ignores the hostname, so we disable host
+	// prefixing and send every request to the plain configured endpoint. This
+	// mirrors the path-style addressing used for the S3 client above.
+	s3ControlClient := s3control.NewFromConfig(aws.Config{
+		Region:      "default",
+		Credentials: credentials.NewStaticCredentialsProvider(effAccessKey, effSecretKey, effSessionToken),
+		HTTPClient:  httpClient,
+	}, func(o *s3control.Options) {
+		o.BaseEndpoint = &endpoint
+		o.EndpointResolverV2 = s3controlPlainEndpointResolver{endpoint: endpoint}
+		o.APIOptions = append(o.APIOptions, disableS3ControlHostPrefix)
+	})
+
 	client := &RadosgwClient{
 		Admin:        adminClient,
 		S3:           s3Client,
+		S3Control:    s3ControlClient,
 		Endpoint:     endpoint,
 		AccessKey:    effAccessKey,
 		SecretKey:    effSecretKey,
@@ -677,6 +734,7 @@ func (p *RadosgwProvider) Resources(ctx context.Context) []func() resource.Resou
 		NewS3BucketRateLimitResource,
 		NewS3BucketOwnershipControlsResource,
 		NewS3BucketPublicAccessBlockResource,
+		NewS3AccountPublicAccessBlockResource,
 		NewSNSTopicResource,
 		NewSNSTopicPolicyResource,
 	}
@@ -704,6 +762,7 @@ func (p *RadosgwProvider) DataSources(ctx context.Context) []func() datasource.D
 		NewS3BucketRateLimitDataSource,
 		NewCallerIdentityDataSource,
 		NewS3BucketPublicAccessBlockDataSource,
+		NewS3AccountPublicAccessBlockDataSource,
 		NewSNSTopicDataSource,
 	}
 }
