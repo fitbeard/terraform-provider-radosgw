@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.1.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v2.0.0...v2.1.0) (2026-11-17)
+
+
+### Features
+
+* add radosgw_caller_identity data source (STS GetCallerIdentity) ([#158](https://github.com/fitbeard/terraform-provider-radosgw/issues/158)) ([44a2411](https://github.com/fitbeard/terraform-provider-radosgw/commit/44a241133476dc50a044b7ff5a1980b2e896f0c5))
+* add radosgw_s3_account_public_access_block resource and data source (S3 Control) ([#163](https://github.com/fitbeard/terraform-provider-radosgw/issues/163)) ([42fb4ec](https://github.com/fitbeard/terraform-provider-radosgw/commit/42fb4ec1f3a238f6350fa7e44c2c9313efa64c17))
+* add radosgw_s3_bucket_ownership_controls (S3 Object Ownership) ([#161](https://github.com/fitbeard/terraform-provider-radosgw/issues/161)) ([331ef9e](https://github.com/fitbeard/terraform-provider-radosgw/commit/331ef9e5479f539991fa567fdace91bf556fed49))
+* add radosgw_s3_bucket_public_access_block resource and data source ([#162](https://github.com/fitbeard/terraform-provider-radosgw/issues/162)) ([78c0462](https://github.com/fitbeard/terraform-provider-radosgw/commit/78c0462483ef02f3c2b4461ed6022214801ea9aa))
+
+
+### Miscellaneous
+
+* **deps:** Bump the aws-sdk group with 3 updates ([#159](https://github.com/fitbeard/terraform-provider-radosgw/issues/159)) ([facac89](https://github.com/fitbeard/terraform-provider-radosgw/commit/facac891a07ea18b2b5032510ee34359b4be8899))
+
 ## [2.0.0](https://github.com/fitbeard/terraform-provider-radosgw/compare/v1.9.0...v2.0.0) (2026-11-10)
 
 
